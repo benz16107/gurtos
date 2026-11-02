@@ -1,6 +1,6 @@
 // The two locks, live on Solana devnet with test money. Needs CDP_API_KEY_ID, CDP_API_KEY_SECRET and
 // CDP_WALLET_SECRET in the environment, and an API key with the scope policies#manage.
-//   set -a; . ./wallet.env; set +a     # your own CDP keys and the box wallet key, NAME=value lines
+//   set -a; . ~/.config/gurtos/wallet.env; set +a   # your CDP keys, NAME=value lines, outside the repo
 //   BOX_HOME=$(mktemp -d) node --experimental-strip-types tracks/wallet/cdp-wallet.live.ts
 // It gets or creates the CDP account gurtos-agent-wallet, tops it up to 0.10 devnet USDC from Coinbase's faucet,
 // attaches a policy (only the test payee, 5 cents a payment), then:
