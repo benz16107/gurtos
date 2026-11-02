@@ -1,6 +1,9 @@
 # Tracks we are entering (25)
 
-One row per prize track: what it is, what the sponsor requires, and what we do for it. Source of truth: the "Track plan" tab of the Google Sheet "Cal Hacks 13.0 prizes" (id 12VMyvL_Of2KrUHcVfX2kUCKcU5ELMkvsnib-ZmaFG24). Copied here at 6 PM Oct 23.
+> A record from the Cal Hacks 13.0 weekend, kept as it was written. Some files it names were removed from `main` after
+> the hackathon; they are in the [v0.2.0-preview tag](https://github.com/benz16107/gurtos/tree/v0.2.0-preview/docs).
+
+One row per prize track: what it is, what the sponsor requires, and what we do for it. Copied from the team's prize sheet at 6 PM Oct 23.
 
 | Track | What it is | What it needs | What we'll do |
 |---|---|---|---|

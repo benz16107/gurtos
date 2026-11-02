@@ -1,7 +1,7 @@
 // Live check on Solana devnet through Coinbase's CDP facilitator (test money, a few cents). Serves the sell routes
 // from a tiny HTTP server with a fake box, then pays them: /sell/audit with the box's own wallet.pay tool, and
 // /sell/search with the upto scheme. The facilitator refuses a payment from a wallet to itself (self_send_not_allowed), so the money goes to the test payee.
-//   set -a; . ~/.config/calhacks13/env; . ~/Code/scratch/x402-probe/keys.env; set +a
+//   set -a; . ./wallet.env; set +a     # your own CDP keys and the box wallet key, NAME=value lines
 //   node --experimental-strip-types --disable-warning=ExperimentalWarning tracks/wallet/sell-live.ts
 import fs from 'node:fs';
 import http from 'node:http';

@@ -307,7 +307,7 @@ const MAX_SLOTS = 8;
 export class Rendezvous {
   drops = new Map<string, Drop>();
   get(id: string, now = Date.now()) {
-    for (const [k, d] of this.drops) if (now - d.at > RV_TTL) this.drops.delete(k); // shortcut: a sweep per call, fine at hackathon volume
+    for (const [k, d] of this.drops) if (now - d.at > RV_TTL) this.drops.delete(k); // shortcut: a sweep per call over at most 10,000 drops; move to a timer if a relay serves many boxes
     let d = this.drops.get(id);
     if (!d && this.drops.size < 10_000) this.drops.set(id, (d = { at: now, slots: new Map(), waiting: new Map() }));
     return d;

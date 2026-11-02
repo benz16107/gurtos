@@ -17,8 +17,8 @@ happens.
 
 GurtOS is a safe place for agents on a computer you own, even an old laptop: it is a light OS. GurtOS Server needs
 4 GB of memory and a 17 GB disk; GurtOS Personal needs 4 GB and 29 GB
-([install-server](../../site/src/content/docs/get-started/install-server.md),
-[install-personal](../../site/src/content/docs/get-started/install-personal.md)). On it, Shopper is built so that:
+([install-server](https://gurtos.com/docs/get-started/install-server/),
+[install-personal](https://gurtos.com/docs/get-started/install-personal/)). On it, Shopper is built so that:
 
 - **The agent never sees your card.** The card, the signing key and every payment key stay in the box's vault.
   Payments run in the box's core; the agent's task has no secrets and no network of its own.

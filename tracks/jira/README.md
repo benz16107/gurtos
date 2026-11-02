@@ -279,7 +279,8 @@ On the site:
 
 ## The demo videos
 
-Shot lists for both tracks (3 minutes or less each) are in [`docs/videos.md`](../../docs/videos.md).
+Track 1, agents that do the work: [youtu.be/VEFBW-LRM94](https://youtu.be/VEFBW-LRM94). Track 2, security for agents
+acting for a user: [youtu.be/VRVofDW0668](https://youtu.be/VRVofDW0668).
 
 ## Limits
 

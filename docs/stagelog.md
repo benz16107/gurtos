@@ -1,5 +1,8 @@
 # Figma stage log
 
+> A record from the Cal Hacks 13.0 weekend, kept as it was written. Some files it names were removed from `main` after
+> the hackathon; they are in the [v0.2.0-preview tag](https://github.com/benz16107/gurtos/tree/v0.2.0-preview/docs).
+
 One line per Figma step: stage, Figma tool, minutes, rating 1 to 5, how the output reached the project.
 
 | When (PT) | Stage | Tool | Minutes | Rating | How it reached the project |

@@ -52,7 +52,7 @@ In scope:
 - First-run setup, pairing, and setup from another computer (port 7701).
 - The update and rollback path and its signature checks, and the release files and their signatures.
 - The portal, the GurtOS Personal desktop layer, and the phone, Watch, Mac and Android apps.
-- The relay in `relay/` and the live demo in `try/`, as code you can run. Their hosted copies are offline.
+- The relay in `relay/`, as code you can run. The hosted relay is offline.
 - The web app at app.gurtos.com.
 
 Out of scope:

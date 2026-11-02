@@ -343,7 +343,7 @@ Shopper on chain. `DEMO_LIVE=fetch,droid` adds a Droid task that fixes the faili
 | Real tool use | Droid, Apify, CRS, Fetch's testnet, Fetch.ai's public agents |
 | Public repo with run steps | "Run it", above |
 | README with agent names, addresses and badges | this file, and each profile in `profiles/` |
-| 3 to 5 minute video | `docs/videos.md`, section 2 |
+| 3 to 5 minute video | [youtu.be/tcNbHb6XZuc](https://youtu.be/tcNbHb6XZuc) |
 | Multi-agent (bonus) | 1, 2, 6 and 8 |
 | Payment Protocol (bonus) | 3 |
 | ASI Interactive Cards (bonus) | 4 |

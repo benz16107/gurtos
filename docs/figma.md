@@ -1,5 +1,8 @@
 # Figma handoff
 
+> A record from the Cal Hacks 13.0 weekend, kept as it was written. Some files it names were removed from `main` after
+> the hackathon; they are in the [v0.2.0-preview tag](https://github.com/benz16107/gurtos/tree/v0.2.0-preview/docs).
+
 Everything the portal thread needs to build the box's own screen, the portal and the phone from Figma. Claude Code
 made these files through Figma's MCP server, in Ben's School team (UofT account).
 

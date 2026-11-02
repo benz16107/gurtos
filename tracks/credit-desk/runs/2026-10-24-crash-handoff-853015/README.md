@@ -4,13 +4,12 @@ Run `853015`, the October case with scripted seats, on a throwaway box on the te
 
 1. The analyst prepared the fraud referral for APP-1043 and the AP clerk referred B-3315 (the lookalike bank change)
    to the controller. Both requests were routed to Rosa and unanswered; both seats were `waiting`.
-   (`../../screenshots/handoff-1-before-the-plug.png`)
 2. The plug: the box's whole process group and every task user's processes were killed at once and the task mounts
    dropped, with no clean shutdown. 67 events were in the log.
 3. The box booted at 10:15:05 UTC with `cleanStart: false` and resumed both waiting seats. The same two requests
-   were still pending in the window. (`handoff-2-after-the-reboot.png`)
+   were still pending in the window. (`../../screenshots/handoff-2-after-the-reboot.png`)
 4. Rosa approved both in the window. The analyst went on to Bright Harbor's $40,000, which she also approved, and
-   all three seats finished. (`handoff-3-finished.png`)
+   all three seats finished. (`../../screenshots/handoff-3-finished.png`)
 
 Checked from the log (`log.jsonl`, the box's own action log for this run):
 

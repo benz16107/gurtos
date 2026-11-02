@@ -1,5 +1,5 @@
 {
-  "name": "@calhacks13/shopper",
+  "name": "shopper",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "gurtos",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Operating systems built for AI agents: each task runs as its own Linux user in its own copy of the files, keys stay in a root-only vault, and risky steps wait for the owner.",
   "license": "Apache-2.0",
   "homepage": "https://gurtos.com",

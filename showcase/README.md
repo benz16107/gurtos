@@ -57,7 +57,7 @@ What you get for free on every track page, kit or legacy:
 | `<Compare>` | `labels={['Before', 'After']}`; put one `<div slot="a">` and one `<div slot="b">` inside, each with markdown or a `<Shot>` (leave blank lines around the markdown). Stacks on phones |
 | `<CriteriaMap>` | `sponsor`, `source` (where the criteria are quoted from, HTML), `items={[{ ask, status: 'met' \| 'partly' \| 'open', how, evidence: [{ label, href }] }]}`. Quote the sponsor's own words in `ask` |
 | `<Details>` | `summary`; slot: technical depth, markdown. `open` to start open |
-| `<OSvsTrack>` | `sponsor`, `rows={[{ what, why, os, track, status }]}`: one row per feature, saying what the OS provides and what the sponsor's product provides. `bible.py` reads these rows for `docs/story.md`, so this is where a feature's status ("Being built") lives |
+| `<OSvsTrack>` | `sponsor`, `rows={[{ what, why, os, track, status }]}`: one row per feature, saying what the OS provides and what the sponsor's product provides. A feature's status ("Being built") lives here |
 | `<Steps>` | `title`, `time`; slot: a numbered markdown list (blank line after the opening tag) |
 | `<Evidence>` | `title`, `run` (what was run, when), `numbers={[{ value, label }]}`, `sources={[{ label, href }]}`; slot: a code block or list of log lines |
 | `<Numbers>` | `items={[{ value, label, href, source }]}`: 3 to 5 big figures, each with a source link (`source` is the link text) |
@@ -65,7 +65,7 @@ What you get for free on every track page, kit or legacy:
 | `<Limits>` | `title`; slot: a list of what is not covered. Say it plainly; judges trust it |
 | `<Flow>`, `<Status>`, `<LinkList>`, `<Video>` | The older components, still available. `Flow` and `Status` read their data from frontmatter; `Video` shows the narrated video or a clip |
 
-Rules that hold on every page (see `docs/story.md`): claim nothing the code does not do; label test money and what is
+Rules that hold on every page: claim nothing the code does not do; label test money and what is
 simulated; only sourced incidents on the finance pages; no em dashes; no private details in screenshots (check each image
 by eye, `npm run check` cannot). Section order, how many sections and which components to use are your call.
 

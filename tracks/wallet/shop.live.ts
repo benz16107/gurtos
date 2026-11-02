@@ -1,6 +1,6 @@
 // Live check for the task memo and wallet.payMetered. Spends about 2 cents of devnet USDC (test money) and needs
 // CDP keys plus the box wallet key in the environment:
-//   set -a; . ~/.config/calhacks13/env; . ~/Code/scratch/x402-probe/keys.env; set +a
+//   set -a; . ./wallet.env; set +a     # your own CDP keys and the box wallet key, NAME=value lines
 //   node --experimental-strip-types --disable-warning=ExperimentalWarning tracks/wallet/shop.live.ts
 import type { AddressInfo } from 'node:net';
 import { createCdpFacilitatorClient } from '@coinbase/cdp-sdk/x402';

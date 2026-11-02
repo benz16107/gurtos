@@ -1,4 +1,4 @@
-# The keystore and its passwords stay out of git (on the build machine, in ~/.config/calhacks13/android/).
+# The keystore and its passwords stay out of git (in a private folder on the build machine).
 signing/
 *.keystore
 *.jks
