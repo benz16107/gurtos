@@ -262,11 +262,6 @@ export interface Track {
    * falls back to test mode without. The App Center marks them `optional: true`, and setup asks only for the others.
    */
   optionalSecrets?: string[];
-  /**
-   * @deprecated Not read by the core: a new box turns on only the model app (`anthropic`), so every other app is off
-   * until the owner turns it on. Kept so a track that sets it still loads.
-   */
-  offByDefault?: boolean;
   triggers?: Trigger[];
   tools?: Tool[];
   logReaders?: LogReader[];

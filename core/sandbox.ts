@@ -864,12 +864,3 @@ export function refreshView(workspace: string, layers: string[]) {
   mountOverlay(v, lowers);
 }
 
-/** Unmount everything under BOX_HOME. The demo uses it to act out a power cut. */
-export function unmountAll() {
-  const mine = fs
-    .readFileSync('/proc/self/mountinfo', 'utf8')
-    .split('\n')
-    .map((l) => l.split(' ')[4])
-    .filter((m) => m?.startsWith(HOME + '/'));
-  for (const m of mine) unmount(m);
-}

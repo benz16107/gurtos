@@ -70,7 +70,6 @@ What `track.ts` default-exports.
 | `secrets` | `string[]?` | Vault keys the app's routes and triggers may read with `box.secret()`. Tools and model jobs declare their own. |
 | `optionalSecrets` | `string[]?` | Keys among the app's declared secrets that it can run without. App Center marks them optional, and setup asks only for the others. |
 | `taskContext` | `(spec, box) => string \| undefined` | Called for every new task before it starts, except a guest's task. Return plain text to add to a Droid task's prompt, such as what the app remembers that is relevant. A throw or more than 2 seconds is logged and the task starts without it. All apps together may add 8,000 characters. |
-| `offByDefault` | `boolean?` | Deprecated and not read. A new box turns on only the model app. |
 | `triggers` | `Trigger[]` | Started when the app turns on: at boot after the API is up, or when the owner enables it. |
 | `tools` | `Tool[]` | Tasks that list a tool's name can call it through their broker. |
 | `logReaders` | `LogReader[]` | Fed every log event in order, from the start, resuming after restarts. |

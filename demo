@@ -11,18 +11,17 @@
 #   BOX_REVIEW=off ./demo          switch the second look at risky agent steps off (the anthropic track compares)
 set -euo pipefail
 cd "$(dirname "$0")"
-skip=; args=()
+args=()
 for a in "$@"; do
   case $a in
     --live-droid) export DEMO_LIVE="${DEMO_LIVE:+$DEMO_LIVE,}droid" ;;
-    --skip-droid) ;; # real Droid is off by default now; kept so old command lines still work
     *) args+=("$a") ;;
   esac
 done
 set -- "${args[@]+"${args[@]}"}"
 
 if [[ ${1:-} == --here ]]; then
-  [[ $(id -u) == 0 ]] || exec sudo DEMO_SKIP_DROID="${DEMO_SKIP_DROID:-$skip}" DEMO_LIVE="${DEMO_LIVE:-}" DEMO_ONLY="${DEMO_ONLY:-}" BOX_REVIEW="${BOX_REVIEW:-}" "$0" --here
+  [[ $(id -u) == 0 ]] || exec sudo DEMO_LIVE="${DEMO_LIVE:-}" DEMO_ONLY="${DEMO_ONLY:-}" BOX_REVIEW="${BOX_REVIEW:-}" "$0" --here
   flock /run/lock/box-setup.lock core/setup.sh >/dev/null # runs side by side share one machine setup
   lock=$(sha256sum package-lock.json | cut -c1-16)
   if [[ -f node_modules/.lock-$lock ]]; then
@@ -37,7 +36,7 @@ if [[ ${1:-} == --here ]]; then
     echo "demo: another demo run is using this machine; waiting for it to finish"
     flock 7
   fi
-  BOX_REVIEW="${BOX_REVIEW:-}" DEMO_ONLY="${DEMO_ONLY:-}" DEMO_SKIP_DROID="${DEMO_SKIP_DROID:-$skip}" exec node --experimental-strip-types --disable-warning=ExperimentalWarning core/demo.ts
+  BOX_REVIEW="${BOX_REVIEW:-}" DEMO_ONLY="${DEMO_ONLY:-}" exec node --experimental-strip-types --disable-warning=ExperimentalWarning core/demo.ts
 fi
 
 # Named machines come from an untracked file, one "name=command that runs a root shell there" per line.
@@ -63,5 +62,5 @@ echo "demo: $BOX_SHELL, in $dest"
   git ls-files -co --exclude-standard | while IFS= read -r f; do [[ -e $f ]] && printf '%s\n' "$f"; done |
     tar --mode=go+rX,go-w -czf - -T - | base64
   echo EOF
-  echo "DEMO_SKIP_DROID=$skip DEMO_LIVE=$(printf %q "${DEMO_LIVE:-}") DEMO_ONLY=$(printf %q "${DEMO_ONLY:-}") BOX_REVIEW=$(printf %q "${BOX_REVIEW:-}") exec $dest/demo --here"
+  echo "DEMO_LIVE=$(printf %q "${DEMO_LIVE:-}") DEMO_ONLY=$(printf %q "${DEMO_ONLY:-}") BOX_REVIEW=$(printf %q "${BOX_REVIEW:-}") exec $dest/demo --here"
 } | $BOX_SHELL sudo bash -s || { code=$?; [[ $code == 255 ]] && echo "demo: could not reach the test machine ($BOX_SHELL)" >&2; exit $code; }

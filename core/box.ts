@@ -17,7 +17,7 @@ import * as sandbox from './sandbox.ts';
 import { HOME, dirs } from './sandbox.ts';
 import { MODELS, modelProblem, resolveModel } from './models.ts';
 import { usageCents } from './pricing.ts';
-import { DEFAULT_SETTINGS, SETUP_STEPS, applyPatch, folderRefusal, hadHumanUse, hostProblem, insideAny, neverFolder, loadDisabled, loadSetup, loadSettings, readJson, readState, recordStep, saveDisabled, saveSettings, saveSetup, writeJson, type Settings, type SetupState } from './config.ts';
+import { SETUP_STEPS, applyPatch, folderRefusal, hadHumanUse, hostProblem, loadDisabled, loadSetup, loadSettings, readJson, readState, recordStep, saveDisabled, saveSettings, saveSetup, writeJson, type Settings, type SetupState } from './config.ts';
 import * as system from './system.ts';
 import { VAULT_NAME, loadVault, redact, removeVaultKey, secretValues, writeVaultKey } from './vault.ts';
 import { challenge, checkSso, noGroup, personId, provider, random, roleFor, verifyIdToken, whoIs, type Claims, type Sso } from './sso.ts';
@@ -1206,7 +1206,6 @@ class Core {
   /** What a person may approve now, and their own requests still waiting: "Waiting for me". */
   me(req: http.IncomingMessage) {
     const p = this.personOf(req);
-    const pending = [...this.state.approvals.values()].filter((a) => a.state === 'pending');
     const withRoute = (a: Approval) => ({ ...a, route: a.route ?? this.routeOf(a, this.must(a.task)) });
     return {
       // Whether this caller has the owner's controls (settings, keys, apps, devices), so a screen need not probe for them.

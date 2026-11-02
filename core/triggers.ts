@@ -2,7 +2,7 @@
 // event into a TaskSpec (return nothing to skip) and the box starts the task. Put one in a track's
 // `triggers` array. The box calls `start(box)` once at boot, so a schedule or watch re-arms after a restart.
 import fs from 'node:fs';
-import type { Box, TaskSpec, Trigger } from './contract.ts';
+import type { TaskSpec, Trigger } from './contract.ts';
 
 /** The first `h:m` (local time) strictly after `after`. */
 export function nextDaily(after: number, h: number, m: number): Date {

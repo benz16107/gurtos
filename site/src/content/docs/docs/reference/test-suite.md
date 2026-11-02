@@ -48,9 +48,8 @@ DEMO_LIVE=find ./demo my-vm           # also make an app's paid or slow live cal
 | `DEMO_LIVE` | App names, separated by commas or spaces, whose paid or slow live calls should run: test-network payments, Stripe test mode, outside APIs, and `droid` for real model calls. Each app's README names its own value. Off by default, so every step stays offline and spends nothing. |
 | `DEMO_ONLY` | Runs only the steps whose title is `track <name>` (an app's step) or starts with `<name>:` (the core scenarios named that way, such as `security`, `personal`, `permissions`, `setup`). `DEMO_ONLY=anthropic` runs the model app's step. The merge gate runs everything. |
 | `BOX_REVIEW=off` | Switches off the second look at risky agent steps, so the attack tests can be compared with and without it |
-| `--skip-droid` | Still accepted and does nothing, since real Droid is off unless asked for |
 
-Before a run, the suite prints how much of Factory's 5-hour and weekly limits is used. It turns real Droid off for that run when the 5-hour limit is 90% used, unless `DEMO_LIVE_DROID_FORCE=1` reaches the run. The shipped command line passes only `DEMO_LIVE`, `DEMO_ONLY`, `DEMO_SKIP_DROID` and `BOX_REVIEW`, so that variable works only with `./demo --here` started as root.
+Before a run, the suite prints how much of Factory's 5-hour and weekly limits is used. It turns real Droid off for that run when the 5-hour limit is 90% used, unless `DEMO_LIVE_DROID_FORCE=1` reaches the run. The shipped command line passes only `DEMO_LIVE`, `DEMO_ONLY` and `BOX_REVIEW`, so that variable works only with `./demo --here` started as root.
 
 `DEMO_LIVE=remote` runs the remote-access step against a real relay at `BOX_RELAY`, which defaults to the hosted relay at `box.gurtos.com`. That relay is not running during the preview. Leave `remote` out, or point `BOX_RELAY` at a relay you run (see [Self-host](/docs/guides/self-host/)). Like `DEMO_LIVE_DROID_FORCE`, `BOX_RELAY` reaches the run only with `./demo --here` started as root.
 
