@@ -12,8 +12,8 @@ import { AddRow, Alert, AppIcon, Badge, Button, ComboRow, Group, Icon, IconButto
 import { HeaderBar, InWindow, open, phone, useWin } from '../wm.tsx';
 import { access } from '../shell.tsx';
 import { PRODUCT } from '../product.ts';
-import { dollars, keyLabel, plural, selfBox, sentence, testApp, byApp, useNow } from '../util.ts';
-import { pairLink as link, pairNote, useRelayUp, type PairCode } from '../relay.ts';
+import { dollars, keyLabel, loopback, money, plural, selfBox, sentence, testApp, byApp, useNow } from '../util.ts';
+import { formatCode, pairLink as link, pairNote, useRelayUp, type PairCode } from '../relay.ts';
 import { KillSwitchPage, PeoplePage, RulesPage } from './company.tsx';
 /** One model key lets agents think: an Anthropic key or a Factory key. */
 const MODEL_KEYS = ['ANTHROPIC_API_KEY', 'FACTORY_API_KEY'];
@@ -169,7 +169,6 @@ export const ReadOnly = () => (
   </div>
 );
 
-// A custom accent from appearance.accent. shortcut: applied while Settings is open; live.applyTheme should call it at start.
 // ---------- the window ----------
 
 export function SettingsApp({ page }: { page: string }) {
@@ -368,8 +367,6 @@ function Agents() {
 
 // ---------- Permissions ----------
 
-const money = (cents: number[], current: number, none?: string): [string, string][] =>
-  [...new Set([...cents, current])].sort((a, b) => a - b).map((c) => [String(c), c === 0 && none ? none : dollars(c)]);
 const HOURS = ['22:00-07:00', '23:00-07:00', '21:00-06:00', '00:00-08:00'];
 
 function Permissions() {
@@ -590,8 +587,6 @@ interface Device {
   /** When it last called GurtOS, if GurtOS reports it. */
   lastSeen?: string;
 }
-export const formatCode = (c: string) => c.toUpperCase().match(/.{1,4}/g)?.join('-') ?? c;
-const loopback = ['127.0.0.1', 'localhost'].includes(location.hostname);
 /** The link in a pairing QR (relay.ts pairLink), with this page's own address for an older core's bare code. */
 export function pairLink(c: PairCode, relayUp: boolean | undefined) {
   const self = selfBox().url;

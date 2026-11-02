@@ -8,11 +8,11 @@ import { AppIcon, Badge, Button, ComboRow, Group, Icon, IconButton, LinkRow, Pop
 import { access } from './shell.tsx';
 import { phone } from './wm.tsx';
 import { PRODUCT } from './product.ts';
-import { dollars, hhmm, selfBox, sentence, useNow } from './util.ts';
+import { hhmm, loopback, money, selfBox, sentence, useNow } from './util.ts';
 import './setup.css';
 import { QuickStartHere, hasQuickStart } from './apps/quickstart.tsx';
 import { Qr, pairLink } from './apps/settings.tsx';
-import { pairNote, relayUp, useRelayUp, type PairCode } from './relay.ts';
+import { formatCode, pairNote, relayUp, useRelayUp, type PairCode } from './relay.ts';
 
 interface Step {
   id: string;
@@ -347,8 +347,6 @@ function Access() {
 // ---------- pairing the owner's phone ----------
 
 let ownerDevice: Device | undefined;
-const loopback = ['127.0.0.1', 'localhost'].includes(location.hostname);
-const formatCode = (c: string) => c.toUpperCase().match(/.{1,4}/g)?.join('-') ?? c;
 
 /**
  * A one-time owner code for the QR, renewed when it expires. Once a phone pairs as the owner the wizard mints no
@@ -714,9 +712,6 @@ function ModelsStep({ w }: { w: Wiz }) {
 }
 
 // ---------- permissions ----------
-
-const money = (list: number[], cur: number, none?: string): [string, string][] =>
-  [...new Set([...list, cur])].sort((a, b) => a - b).map((c) => [String(c), c === 0 && none ? none : dollars(c)]);
 
 function SafetyStep({ w }: { w: Wiz }) {
   const s = box.settings;

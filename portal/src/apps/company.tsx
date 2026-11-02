@@ -7,13 +7,12 @@ import { api, box, loadBusiness, pairing, surface, useBox, type Person, type Pil
 import { AddRow, Alert, AppIcon, Badge, Button, ComboRow, Group, Icon, IconButton, LinkRow, Menu, Popover, Row, Sheet, StatusPage, SwitchRow, type MenuItem } from '../kit/ui.tsx';
 import { InWindow, useWin } from '../wm.tsx';
 import { PRODUCT } from '../product.ts';
-import { appOf, hhmm, ofState, plural, useNow, zone } from '../util.ts';
-import { Qr, formatCode, pairLink } from './settings.tsx';
-import { pairNote, type PairCode } from '../relay.ts';
+import { appOf, hhmm, ofState, plural, usd, useNow, zone } from '../util.ts';
+import { Qr, pairLink } from './settings.tsx';
+import { formatCode, pairNote, type PairCode } from '../relay.ts';
 
 // ---------- shared ----------
 
-const usd = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 const list = (xs: string[], and = 'and') => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} ${and} ${xs.at(-1)}`);
 const when = (t: string | number) => new Date(t).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', ...zone() }).replace(',', '');
 const Loading = () => <div class="gos-skeleton gos-skeleton-short" role="status" aria-label="Loading" />;

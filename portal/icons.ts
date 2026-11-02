@@ -5,13 +5,13 @@
 import fs from 'node:fs';
 
 const NAMES = `applications-science avatar-default computer dialog-error dialog-information dialog-password dialog-warning
-document-edit document-open-recent edit-copy edit-find edit-undo emblem-ok emblem-system find-location folder go-next
-go-previous go-up help-about list-add list-remove mail-unread media-playback-pause media-playback-start network-offline
+document-edit document-open-recent edit-copy edit-find edit-undo emblem-ok emblem-system folder go-next
+go-previous help-about list-add list-remove media-playback-pause media-playback-start network-offline
 network-server network-wired network-wireless-signal-excellent object-select open-menu pan-down pan-end pan-up phone
 preferences-desktop-accessibility preferences-desktop-appearance preferences-desktop-apps preferences-desktop-display
-preferences-desktop-keyboard preferences-desktop-locale preferences-system-details preferences-system-network
+preferences-desktop-keyboard preferences-desktop-locale
 preferences-system-notifications preferences-system-privacy preferences-system-time process-stop security-high
-sidebar-show software-update-available system-lock-screen system-reboot system-search system-shutdown user-home
+software-update-available system-lock-screen system-search system-shutdown user-home
 user-trash utilities-terminal view-app-grid view-grid view-list view-more weather-clear-night web-browser window-close
 window-maximize window-minimize window-restore x-office-document appointment-soon dialog-question view-refresh`.split(/\s+/);
 

@@ -8,8 +8,7 @@ import { Alert, Badge, Button, Group, Icon, Row } from '../kit/ui.tsx';
 import { ios, standalone } from '../pwa/pwa.tsx';
 import { PRODUCT } from '../product.ts';
 import { RELAY, SELF_HOST_DOCS, relayDown } from '../relay.ts';
-const b64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-const unb64url = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+import { b64u, unb64u } from './qs-crypto.ts';
 
 export const pushWorks = () => typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && isSecureContext;
 /** An iPhone allows web push only for apps added to the Home Screen. */
@@ -36,11 +35,11 @@ async function subscription() {
   })) as { publicKey: string };
   let sub = await reg.pushManager.getSubscription();
   const key = sub?.options.applicationServerKey;
-  if (sub && (!key || b64url(new Uint8Array(key)) !== publicKey)) {
+  if (sub && (!key || b64u(new Uint8Array(key)) !== publicKey)) {
     await sub.unsubscribe();
     sub = null;
   }
-  return sub ?? reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64url(publicKey) });
+  return sub ?? reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64u(publicKey) });
 }
 
 /** Turn on notifications from every paired machine. Returns the machines that could not be reached. */
@@ -49,7 +48,7 @@ export async function turnOn() {
   const sub = (await subscription()).toJSON();
   const missed: string[] = [];
   for (const m of machines()) {
-    const pushKey = m.pushKey ?? b64url(crypto.getRandomValues(new Uint8Array(32)));
+    const pushKey = m.pushKey ?? b64u(crypto.getRandomValues(new Uint8Array(32)));
     await callMachine(m, 'PUT', '/push', { subscription: sub, key: pushKey }).then(
       () => updateMachine({ ...m, pushKey }),
       () => missed.push(m.box.name),

@@ -25,6 +25,9 @@ export function useRelayUp(ask = true) {
   return up;
 }
 
+/** A pairing code in groups of four: ABCD-EFGH. */
+export const formatCode = (c: string) => c.toUpperCase().match(/.{1,4}/g)?.join('-') ?? c;
+
 /** What POST /api/pair/start returns. */
 export interface PairCode {
   code: string;

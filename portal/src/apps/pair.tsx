@@ -4,9 +4,8 @@ import { api, pairing, setPairing, type Pairing } from '../live.ts';
 import { Button, Icon } from '../kit/ui.tsx';
 import { HeaderBar } from '../wm.tsx';
 import { PRODUCT } from '../product.ts';
+import { formatCode } from '../relay.ts';
 import { selfBox } from '../util.ts';
-
-export const formatCode = (c: string) => c.toUpperCase().match(/.{1,4}/g)?.join('-') ?? c;
 
 export function PairApp({ code }: { code: string }) {
   const guess = /iPhone/.test(navigator.userAgent) ? 'iPhone' : /Android/.test(navigator.userAgent) ? 'Android phone' : 'Phone';

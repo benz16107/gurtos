@@ -49,7 +49,6 @@ const APP_ICONS: Record<string, { glyph: string; tile: string }> = {
   find: { glyph: find, tile: 'var(--color-app-find)' },
   jira: { glyph: jira, tile: 'var(--color-app-jira)' },
   fetch: { glyph: asiOne, tile: 'var(--color-app-asi-one)' },
-  'asi-one': { glyph: asiOne, tile: 'var(--color-app-asi-one)' },
   waiting: { glyph: waiting, tile: 'var(--color-app-waiting)' },
   audit: { glyph: audit, tile: 'var(--color-app-audit)' },
 };
@@ -67,7 +66,6 @@ const APP_SYMBOLS: Record<string, { icon: string; tile: string }> = {
   example: { icon: 'preferences-desktop-apps', tile: 'var(--color-app-other)' },
   receipts: { icon: 'x-office-document', tile: 'var(--color-app-audit)' },
 };
-export const hasAppIcon = (id: string) => id in APP_ICONS || id in APP_SYMBOLS;
 
 /** An app icon at any size. An app with neither a glyph nor a symbol shows its first letter on a neutral tile. */
 export function AppIcon({ id, title, size = 52 }: { id: string; title?: string; size?: number }) {
@@ -135,13 +133,6 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
 
 export const Badge = ({ kind = 'attention', children }: { kind?: 'attention' | 'accent' | 'neutral' | 'success' | 'destructive'; children: ComponentChildren }) => (
   <span class={`g-badge${kind !== 'attention' ? ` g-badge-${kind}` : ''}`}>{children}</span>
-);
-
-export const Chip = ({ icon, children }: { icon?: string; children: ComponentChildren }) => (
-  <span class="g-chip">
-    {icon && <Icon name={icon} />}
-    {children}
-  </span>
 );
 
 /** Progress from 0 to 100, or moving when the box doesn't know how far along a task is. */

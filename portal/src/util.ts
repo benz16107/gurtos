@@ -3,6 +3,13 @@ import { useEffect, useState } from 'preact/hooks';
 import { HOLD, box, forMe, surface, type Approval, type Task } from './live.ts';
 
 export const dollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+/** Whole dollars with a thousands separator, for the larger amounts a business approves: $12,000. */
+export const usd = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
+/** Dropdown options for amounts in cents, with the current value added and sorted in; `none` names a zero. */
+export const money = (cents: number[], current: number, none?: string): [string, string][] =>
+  [...new Set([...cents, current])].sort((a, b) => a - b).map((c) => [String(c), c === 0 && none ? none : dollars(c)]);
+/** This page is open on the computer itself (its own screen), not through a network address. */
+export const loopback = ['127.0.0.1', 'localhost'].includes(location.hostname);
 /** Today's spending, once the log has been read (before that a total would be too low). */
 export const spentToday = () => (box.logLoaded ? dollars(box.today.cents) : '…');
 export const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;

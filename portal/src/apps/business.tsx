@@ -6,10 +6,9 @@ import { AppIcon, Badge, Icon, IconButton, StatusPage } from '../kit/ui.tsx';
 import { HeaderBar, open, phone, useWin } from '../wm.tsx';
 import { AnswerButtons } from './answer.tsx';
 import { openMachines } from './machines.tsx';
-import { appOf, hhmm } from '../util.ts';
+import { appOf, hhmm, usd } from '../util.ts';
 import { useState } from 'preact/hooks';
 
-const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`;
 const firstName = (name: string) => name.split(' ')[0];
 const when = (t: string | number) => `${new Date(t).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')}, ${hhmm(t)}`;
 
@@ -55,7 +54,7 @@ function AskBadge({ a, mine }: { a: Approval; mine?: boolean }) {
   if (a.state === 'approved') return <Badge kind="success">Approved</Badge>;
   if (a.state === 'denied') return <Badge kind="destructive">Denied</Badge>;
   if (mine) return <Badge>Waiting</Badge>;
-  return i.fraud ? <Badge kind="destructive">Fraud flag</Badge> : i.amount ? <Badge>{money(i.amount)}</Badge> : <Badge>Needs you</Badge>;
+  return i.fraud ? <Badge kind="destructive">Fraud flag</Badge> : i.amount ? <Badge>{usd(i.amount)}</Badge> : <Badge>Needs you</Badge>;
 }
 
 function AskRow({ a, mine, stuck, selected, onPick }: { a: Approval; mine?: boolean; stuck?: boolean; selected?: boolean; onPick: () => void }) {
@@ -208,7 +207,7 @@ export function RequestDetail({ id }: { id: string }) {
     <article class="biz-request" aria-label={i.title}>
       <h1 class="t-title2 biz-request-title">{i.fraud ? `Fraud flag on ${i.title}` : i.title}</h1>
       <p class="biz-request-amount">
-        {!i.fraud && i.amount > 0 && <span class="biz-money">{money(i.amount)}</span>}
+        {!i.fraud && i.amount > 0 && <span class="biz-money">{usd(i.amount)}</span>}
         {mine && <AskBadge a={full} mine />}
         <span class="t-body t-secondary">{[i.terms, i.id].filter(Boolean).join(' · ')}</span>
       </p>
