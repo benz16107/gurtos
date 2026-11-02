@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # GurtOS Personal's look and session, on Ubuntu's GNOME: the GurtOS session (its own Shell mode, which loads the
 # GurtOS Shell extension so it is always on), dconf defaults, wallpaper, icons, GTK accents, logos, the GDM logo and
-# a Plymouth theme. Run as root by personal/install.sh; works in a chroot. The Figma theme replaces the files here.
+# a Plymouth theme. Run as root by personal/install.sh; works in a chroot.
 set -euo pipefail
 t=$(cd "$(dirname "$0")" && pwd)
 shell=$(cd "$t/../shell" && pwd)

@@ -24,7 +24,7 @@ ISO walked as a new person, on Wayland (Ubuntu's default) and Xorg.
 | Talk to your computer | Press Super+Alt+Space or choose it in the top-bar menu or the Agents tile, then say "what did my agents do today?", "find the whiteboard photo" or "approve the grocery order". Speech becomes text on this machine (faster-whisper `base.en`, CPU, `stt.py`), the answer comes from the box and its /find (Moss) search, and it appears as a notification and is spoken by espeak-ng. The top bar shows a red mic and "Listening…" while the microphone is open, and the same shortcut ends the sentence early. It never listens in the background, and the recording is deleted once it is read. Voice can approve or deny a request that spends nothing, signed `voice:<user>`, and refuses to approve anything that moves money: that needs the passkey or the popover | `voice.py`, `stt.py`, `voice-setup.sh` |
 | App permissions | Turning on an app for the first time, in Settings, asks "<App> wants to:" with a switch for each thing it may do (money, requests from strangers, commands, sites, then its keys). Turn on saves the answers, then turns the app on; Don't turn on leaves it off and asks again next time. Each change is a permissions note in Activity | `setupwin.py`, `settingswin.py` |
 | GurtOS Setup | At the owner's first login, after GNOME's own setup: Welcome, AI models, Folders, Permissions, Pair a phone, Done. It offers no apps: Find is on, the rest are optional in Settings, Apps | `setupwin.py` |
-| The GurtOS app | The agent tools as a native GTK 4 and libadwaita app, like Files or Settings (not the Server screen in a window). A sidebar: Agents, Activity, History, then each installed app. **Agents**: Needs you (Approve or Deny inline, with the amount), Running (live), Ready to review, Done, a Pause all switch and New task. **A task**: what it spent against its budget, the approval if it waits, its changes with Keep, Undo or Put files back and a line-by-line diff, what it can reach (folders, internet, apps, its own user), and its steps, live. **Activity**: the action log, searchable, filtered by task or app. **History**: take out one task, or every task since 15 minutes, an hour or the start of today, newest first. **Apps**: each app's own page as a panel of this window; anything outside the app opens in the browser. It follows the log live (`/api/log/stream`). Ctrl+N is New task, Ctrl+F is Activity. The dock, the top bar, notifications, search and Files all open it | `agentsapp.py`, `tasklogic.py` |
+| The GurtOS app | The agent tools as a native GTK 4 and libadwaita app, like Files or Settings (not the Server screen in a window). A sidebar: Agents, Activity, History, then each installed app. **Agents**: Needs you (Approve or Deny inline, with the amount), Running (live), Ready to review, Done, a Pause all switch and New task. **A task**: what it spent against its budget, the approval if it waits, its changes with Keep or Undo and a line-by-line diff, what it can reach (folders, internet, apps, its own user), and its steps, live. **Activity**: the action log, searchable, filtered by task or app. **History**: undo one task, or every task since 15 minutes, an hour or the start of today, newest first. **Apps**: each app's own page as a panel of this window; anything outside the app opens in the browser. It follows the log live (`/api/log/stream`). Ctrl+N is New task, Ctrl+F is Activity. The dock, the top bar, notifications, search and Files all open it | `agentsapp.py`, `tasklogic.py` |
 | New task | What to do in plain words, the folders it may change (GNOME's folder chooser), Internet on or off with the sites it may reach, and a budget. No folder: it works in a workspace of its own. Files' Ask an Agent… opens the same window | `askwin.py` |
 | The look | Figma's "GurtOS Personal OS" theme: the Hills wallpaper (Lake, Dunes and Strata too, each light and dark), a dark Shell with Atkinson Hyperlegible, the floating dock (Firefox, Files, Text Editor, Console, Software, GurtOS, Settings), minimize, maximize and close, Papirus icons with slate folders, the Bibata cursor, GurtOS colours for GTK 4 apps, the GDM logo and a two-step Plymouth splash. Ubuntu's welcome tour, Pro notices and update nags are hidden in the GurtOS session | `theme/` |
 
@@ -101,22 +101,22 @@ Hyperlegible Next and Mono (bundled in `fonts/`, SIL OFL); app icons are the sys
 (`apptiles.py`, the same paths the portal draws). GNOME's own surfaces (the top bar, notification banners, menus,
 Files) stay GNOME's, with GurtOS content. Notification titles are in sentence case, as Figma's frames show.
 
-## GurtOS Setup and the redesign (Oct 24)
+## GurtOS Setup
 
-Walked on the GurtOS Personal VM as the owner, on Wayland. Each step changes the box as it goes: settings with
-`PATCH /api/settings`, keys with the write-only `PUT /api/vault/<NAME>`, apps with `/api/apps/<id>/enable|disable`,
-each step with `POST /api/setup/step`, then `POST /api/setup/finish`. It opens by itself at login for the owner only,
-after GNOME's own setup, until the box says setup is done, and resumes at the first step not yet taken.
+Setup opens by itself at login for the owner only, after GNOME's own setup, until the box says setup is done, and it
+resumes at the first step not yet taken. Each step changes the box as it goes: settings with `PATCH /api/settings`,
+keys with the write-only `PUT /api/vault/<NAME>`, apps with `/api/apps/<id>/enable|disable`, each step with
+`POST /api/setup/step`, then `POST /api/setup/finish`.
 
-| Step | What it does | Checked |
-|---|---|---|
-| Welcome | What keeps agents safe on this computer | Opened by itself at login |
-| AI models | One model key, write-only: `ANTHROPIC_API_KEY` (your own Anthropic key is enough) or `FACTORY_API_KEY`. A saved key shows as saved, never its value | The VM's key was detected without being shown |
-| Folders | The owner's usual folders, each May change or Not allowed (`agentFolders`), plus Add a folder | Documents and Projects saved; a folder outside is refused (self-test) |
-| Permissions | Internet for new tasks, the spend that always asks, the default budget, quiet hours | $5.00 saved; quiet hours mute approval banners (self-test) |
-| Apps | Removed from Setup for the launch (Oct 29). The same list is GurtOS Settings, Apps: every app with its icon, the sites it reaches and its keys, "Test money only" on Shopper, Agent wallet and ASI:One; Setup only turns Find on the first time | `APIFY_TOKEN` saved: listed by name and time, the chip turned grey; ASI:One turned off and on again in the box |
-| Pair a phone | QR and code when the box has an address a phone can reach; otherwise it says so and offers Skip | No address on Personal yet, so Skip |
-| Done | Four cards: Ask an Agent, the top bar, Keep or Undo, History. Start using GurtOS finishes and opens the app | `done: true`, six steps recorded |
+| Step | What it does |
+|---|---|
+| Welcome | What keeps agents safe on this computer |
+| AI models | One model key, write-only: `ANTHROPIC_API_KEY` (your own Anthropic key is enough) or `FACTORY_API_KEY`. A saved key shows as saved, never its value |
+| Folders | The owner's usual folders, each May change or Not allowed (`agentFolders`), plus Add a folder |
+| Permissions | Internet for new tasks, the spend that always asks, the default budget, quiet hours |
+| Apps | Not offered in Setup. The list is GurtOS Settings, Apps: every app with its icon, the sites it reaches and its keys, "Test money only" on Shopper, Agent wallet and ASI:One. Setup only turns Find on the first time |
+| Pair a phone | QR and code when the box has an address a phone can reach; otherwise it says so and offers Skip |
+| Done | Four cards: Ask an Agent, the top bar, Keep or Undo, History. Start using GurtOS finishes and opens the app |
 
 ![GurtOS Setup opens at login](screenshots/setup/00-first-login.png)
 
@@ -126,15 +126,15 @@ after GNOME's own setup, until the box says setup is done, and resumes at the fi
 
 ![Permissions](screenshots/setup/04-permissions.png)
 
-![Apps](screenshots/setup/05-apps.png)
+![Apps (now in Settings)](screenshots/setup/05-apps.png)
 
-![Apps in dark](screenshots/setup/05-apps-dark.png)
+![Apps in dark (now in Settings)](screenshots/setup/05-apps-dark.png)
 
 ![Pair a phone, with no address yet](screenshots/setup/06-phone.png)
 
 ![Done](screenshots/setup/07-done.png)
 
-The rest of the layer in the new system:
+Files, approvals and review:
 
 ![Ask an Agent in Files](screenshots/setup/10-files-menu.png)
 
@@ -146,57 +146,7 @@ The rest of the layer in the new system:
 
 ![Review: Keep these changes?](screenshots/setup/14-review.png)
 
-![Kept, with Put files back](screenshots/setup/15-kept.png)
-
-## A fresh install, as a new person (Oct 24)
-
-The GurtOS Personal ISO (`image/build personal`, debug build `20261024-0542-ada8208`) attached to the cloud VM as a
-custom ISO, installed on its wiped disk, and walked by hand as a new person, Maya Chen, on Wayland:
-
-| Step | Result |
-|---|---|
-| Install from the ISO and restart | Passed. Booted GurtOS Personal 2026.10.24 from its own disk, box healthy, no owner yet, empty vault |
-| GNOME's first-boot setup (language, keyboard, time zone, About You, password) | Passed. The account `mayachen` is in `sudo`; `box-owner.service` set `BOX_OWNER=mayachen` within a second |
-| First login | Passed. Ubuntu's welcome, then the GurtOS welcome; GurtOS first in the dock, the indicator in the top bar |
-| Ask an Agent on `~/Documents/thesis` in Files | Passed. With the empty vault the task failed at once and the desktop said so ("the vault has no FACTORY_API_KEY"); after the key was added, a real Droid task finished in about a minute for 3 cents |
-| The review notification and the diff | Passed. The folder was untouched until Keep |
-| Keep | Passed. Both files changed, and kept their owner and mode: `chapter1.md` 1000:1000 664, the private `refs.txt` 1000:1000 640 |
-| Undo Keep | Passed. Old content back, same owner and modes |
-| Undo before Keep | Passed. The folder never changed |
-| An approval as a notification, Approve | Passed. The log says `desktop:mayachen` |
-| The GurtOS app from the dock, the indicator menu | Passed |
-| Log out, restart, log in again | Passed. No second welcome; the service and indicator come back |
-
-![GNOME's first-boot setup](screenshots/install/01-setup-welcome.png)
-
-![About You: the first account, which gets sudo](screenshots/install/06-about.png)
-
-![Setup done](screenshots/install/09-setup-done.png)
-
-![The GurtOS welcome at the first login](screenshots/install/12-gurtos-welcome.png)
-
-![Ask an Agent in Files](screenshots/install/15-files-menu.png)
-
-![The Ask an Agent dialog](screenshots/install/16-ask.png)
-
-![The task is done](screenshots/install/19-review-notification.png)
-
-![The review](screenshots/install/20-review.png)
-
-![Kept](screenshots/install/21-kept.png)
-
-![Undo Keep asks first](screenshots/install/22-unkeep-confirm.png)
-
-![An approval as a notification](screenshots/install/24-approval.png)
-
-![Undo before Keep](screenshots/install/29-undo-confirm.png)
-
-![The GurtOS app](screenshots/install/31-app.png)
-
-Found and passed on: apport's Python hook fails on `ID=gurtos`; GNOME's setup renames the computer to the user name;
-apps show Adwaita icons instead of Yaru; setup's first page shows Ubuntu's logo (image thread). A fresh install has
-an empty vault with nothing in the first run to fill it, and Personal has no `BOX_URL`, so phone pairing cannot work
-yet (core thread). The portal greets the owner as "Ben" (portal thread).
+![Kept (this shot shows Put files back, now Undo task)](screenshots/setup/15-kept.png)
 
 ## Talk to your computer: speed
 
@@ -218,7 +168,7 @@ sudo core/install.sh && sudo personal/install.sh [owner]
 `install.sh` installs GNOME if it is missing (`ubuntu-desktop-minimal`) and what the layer uses (GTK 4, libadwaita,
 WebKitGTK 6, nautilus-python, Ubuntu's AppIndicator extension, `dconf-cli`, `librsvg2-common`, and from Figma's
 theme `papirus-icon-theme`, `bibata-cursor-theme` and `gnome-console`). It copies this folder
-to `/opt/box/personal` and installs the apps, icons, fonts, the Files extension, the search provider and GurtOS Setup's
+(without `screenshots/`) to `/opt/box/personal` and installs the apps, icons, fonts, the Files extension, the search provider and GurtOS Setup's
 autostart entry. Then `theme/install.sh` installs the GurtOS session, its Shell mode and extension, the dconf defaults
 (`/etc/dconf/profile/user` and `gdm`, `/etc/dconf/db/gurtos.d`, `gdm.d`, then `dconf update`), wallpaper, icon theme,
 GTK accents in `/etc/skel`, logos and the Plymouth theme, makes the GurtOS session GDM's default
@@ -231,7 +181,7 @@ at first boot). What the image adds itself:
 - Packages: `plymouth` and `plymouth-label` (the splash; `install.sh` sets the GurtOS theme only when Plymouth is
   there) and `splash` on the kernel command line; `qrencode` for pairing QR codes.
 - `DefaultSession=gurtos.desktop` in its own `/etc/gdm3/custom.conf` (install.sh adds it when missing).
-- `/etc/issue` from `theme/issue`; `os-release` with `LOGO=gurtos-logo` (the icon is installed).
+- `/etc/issue` and `/etc/issue.net` with the edition and version; `os-release` with `LOGO=gurtos-logo` (the icon is installed).
 - Optional: drop Ubuntu's sessions from `/usr/share/{wayland-sessions,xsessions}/ubuntu*.desktop`, so the login
   screen offers only GurtOS.
 - Rebuild the initramfs after install.sh (`update-initramfs -u`), for the two-step Plymouth theme.
@@ -279,19 +229,36 @@ its access. It puts the box's settings back afterwards. About 4 seconds, no mode
 BOX_URL=http://127.0.0.1:7700 /usr/bin/python3 personal/selftest.py   # on any box, prints one JSON line per check
 ```
 
+## How it was tested
+
+Besides the demo step, the layer was walked by hand on a cloud VM, on Wayland and Xorg: on plain Ubuntu 24.04 with
+`personal/install.sh`, and on a fresh install of the GurtOS Personal ISO (`image/build personal`) as a new person. To
+repeat the ISO walk, install the ISO on a VM and check that:
+
+- It boots from its own disk with the box healthy, no owner and an empty vault.
+- GNOME's first-boot setup makes an account in `sudo`, and `box-owner.service` sets `BOX_OWNER` to it within a second.
+- At first login Ubuntu's welcome comes first, then GurtOS Setup. GurtOS is first in the dock and the indicator is in
+  the top bar.
+- Ask an Agent on a folder in Files fails at once with an empty vault, and the desktop says "the vault has no
+  FACTORY_API_KEY". With a key added, a real Droid task finishes (about a minute and 3 cents for a two-file edit).
+- The folder stays untouched until Keep. Keep writes the changes with each file's own owner and mode. Undo restores
+  the old content, owner and mode. Undo before Keep leaves the folder as it was.
+- Approving a notification is logged as `desktop:<user>`.
+- After logging out and in again there is no second welcome, and the service and indicator come back.
+
 ## The test machine
 
 A cloud VM made for this edition (4 vCPU, 8 GB). Its address and how to delete it are kept outside the repo.
 
-Since Oct 24 it runs a fresh install of the GurtOS Personal debug ISO, owned by `mayachen`, on Wayland (debug builds
-have sshd for root). `personal/vm.sh` drives it, with `PERSONAL_VM` set to its ssh host; `wl.py` gives it a virtual
-tablet and keyboard through `/dev/uinput`, so it works on Wayland and even in GDM's first-boot setup, where xdotool
-and GNOME's remote-desktop input do not:
+It runs a fresh install of the GurtOS Personal debug ISO on Wayland (debug builds have sshd for root), owned by a
+test user. `personal/vm.sh` drives it, with `PERSONAL_VM` set to its ssh host and `PERSONAL_USER` to that user;
+`wl.py` gives it a virtual tablet and keyboard through `/dev/uinput`, so it works on Wayland and even in GDM's
+first-boot setup, where xdotool and GNOME's remote-desktop input do not:
 
 ```
-PERSONAL_USER=mayachen personal/vm.sh layer         # replace /opt/box/personal on the installed system, restart the layer
-PERSONAL_USER=mayachen personal/vm.sh wl click X Y  # also: wl type TEXT, wl key Return
-PERSONAL_USER=mayachen personal/vm.sh shot <name>   # screenshot into personal/screenshots/<name>.png
+PERSONAL_USER=<user> personal/vm.sh layer         # replace /opt/box/personal on the installed system, restart the layer
+PERSONAL_USER=<user> personal/vm.sh wl click X Y  # also: wl type TEXT, wl key Return
+PERSONAL_USER=<user> personal/vm.sh shot <name>   # screenshot into personal/screenshots/<name>.png
 personal/vm.sh install                              # the older path: the box and this layer onto plain Ubuntu
 ```
 
@@ -314,30 +281,29 @@ delete it afterwards.
 The native app covers one person's agents. With Business on, its sidebar adds Company, which opens the Business
 screens (people, rules, routed approvals, the audit trail) in the browser for now, from the same box.
 
-## UX pass (Oct 24, from docs/ux/audit.md)
+## Wording and defaults
 
-- Words follow `docs/ux/words.md`: Undo before and after Keep (no "Put back", "Take out" or "Go back"), New task,
-  Needs you, Claude, and one sentence about keys: "GurtOS keeps keys where agents can't read them."
+- Words: Undo before and after Keep (no "Put back", "Take out" or "Go back"), New task, Needs you, Claude, and one
+  sentence about keys: "GurtOS keeps keys where agents can't read them."
 - The model key is checked with one call to Anthropic (`GET /v1/models`) before it is saved; a refused key is never
   stored. With no key, Setup's Next reads "Skip for now". A failed task's banner is a sentence, with Open Settings
   when the key is the problem.
 - "Needs you" counts requests only, the same in the pill, the popover, Quick Settings and the app's badge.
 - Banners: none replayed at login, and tasks that finish within 3 seconds of each other share one.
 - Personal's spending defaults: ask over $5.00, budget $1.00, set by Setup the first time and used by New task.
-- Setup offers no apps (launch, Oct 29). The first time, it turns Find on and every other app off. Settings' Apps page
-  lists apps for one person (Find, Shopper, Wallet, Factory, ASI:One, Mana, Apify) with "Needs a key", "Uses the internet"
-  and "Test money only" chips, and the app's sidebar adds "(test)" to the test-money ones. Settings' Keys page groups
-  keys by app.
+- Setup offers no apps. The first time, it turns Find on and every other app off. Settings' Apps page lists apps for
+  one person (Find, Shopper, Wallet, Factory, ASI:One, Mana, Apify) with "Needs a key", "Uses the internet" and "Test
+  money only" chips, and the app's sidebar adds "(test)" to the test-money ones. Settings' Keys page groups keys by app.
 - Times follow GNOME's clock setting (24-hour or AM/PM) in the app, Settings, Setup and the top bar. Text sizes are in
   pt, so GNOME's Large Text makes GurtOS's windows larger too.
-- Plain zeros (P-29, Ben's call): Atkinson Hyperlegible Next draws 0 with a slash and has no plain alternate, so
-  `fonts/plain_zero.py` redraws it: the two half-counters become one oval counter at every weight, and the tabular
-  zero follows. The font is OFL with no reserved name, so it keeps its name; Mono, used for code, keeps the slash.
+- Plain zeros: Atkinson Hyperlegible Next draws 0 with a slash and has no plain alternate, so `fonts/plain_zero.py`
+  redraws it: the two half-counters become one oval counter at every weight, and the tabular zero follows. The font
+  is OFL with no reserved name, so it keeps its name; Mono, used for code, keeps the slash.
 
-## Screenshots for the sites (Oct 24, after the UX fixes)
+## Screenshots for the sites
 
-Taken on the Personal test VM from main, at 1920x1080, with invented demo data (a local demo inbox, never real mail):
-`screenshots/os/everyday.png` and `everyday-dark.png` (1680x1050, 16:10 like the sites' display frame; mail, a browser and Files with the GurtOS app, the top-bar pill
-and a request banner), and in `screenshots/site/`: `approval.png` (a request banner and Needs you), `indicator.png` (the
-top-bar popover), `review.png` (a finished task with Keep changes and Undo task) and `files-menu.png` (Files' menu on a
-folder with changes waiting). They replace the site copies made from the older `setup/` and `install/` shots.
+Taken on the Personal test VM at 1920x1080, with invented demo data (a local demo inbox, never real mail):
+`screenshots/os/everyday.png` and `everyday-dark.png` (1680x1050, 16:10 like the sites' display frame; mail, a browser
+and Files with the GurtOS app, the top-bar pill and a request banner), and in `screenshots/site/`: `approval.png` (a
+request banner and Needs you), `indicator.png` (the top-bar popover), `review.png` (a finished task with Keep changes
+and Undo task) and `files-menu.png` (Files' menu on a folder with changes waiting).

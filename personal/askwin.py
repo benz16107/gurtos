@@ -80,9 +80,9 @@ class AskWindow(Adw.ApplicationWindow):
         worker.add_suffix(Gtk.Label(label='Claude', css_classes=['gurt-secondary']))
         self.list.append(worker)
         body.append(self.list)
-        # Why Start is off, when it is: no model key yet, or Droid still arriving (I-2). Checked before Start, not after.
+        # Why Start is off, when it is: no model key yet, or Droid still arriving. Checked before Start, not after.
         self.blocked = None
-        self.blocker = Adw.ActionRow()  # its list shows and hides; the row itself stays visible (I-2)
+        self.blocker = Adw.ActionRow()  # its list shows and hides; the row itself stays visible
         self.blocker.add_prefix(Gtk.Image(icon_name='dialog-information-symbolic', accessible_role=Gtk.AccessibleRole.PRESENTATION))
         self.open_settings = Gtk.Button(label='Open Settings', valign=Gtk.Align.CENTER)
         self.open_settings.connect('clicked', lambda _b: ui('settings', 'agents'))
@@ -208,7 +208,7 @@ class AskWindow(Adw.ApplicationWindow):
             app = self.get_application()
             app.hold()  # opened from Files there may be no other window; stay up for the notice
 
-            def started(t, _err):  # only once it is really under way; a task that failed at once gets its own notice (I-3)
+            def started(t, _err):  # only once it is really under way; a task that failed at once gets its own notice
                 app.release()
                 if not t or t.get('state') in ('failed', 'undone'):
                     return

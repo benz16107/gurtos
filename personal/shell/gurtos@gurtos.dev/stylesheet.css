@@ -24,7 +24,6 @@ stage { font-family: "Atkinson Hyperlegible", "Ubuntu", sans-serif; }
 /* The popover */
 .gurtos-menu { min-width: 380px; }
 .gurtos-head { spacing: 12px; padding: 8px 12px 10px; }
-.gurtos-head-icon { icon-size: 22px; color: #8DB8EE; }
 .gurtos-head-title { font-weight: bold; font-size: 1.15em; }
 .gurtos-subtitle { color: #AEB4BC; font-size: 0.9em; }
 .gurtos-heading { font-weight: bold; font-size: 0.78em; color: #AEB4BC; letter-spacing: 1px; padding-top: 8px; }
@@ -54,7 +53,7 @@ stage { font-family: "Atkinson Hyperlegible", "Ubuntu", sans-serif; }
 .gurtos-lock-source { spacing: 6px; }
 .gurtos-lock-hint { color: #AEB4BC; font-size: 0.85em; text-align: center; }
 
-/* The popover keeps one width, whatever the task names (P-7). */
+/* The popover keeps one width, whatever the task names. */
 .gurtos-menu { width: 420px; min-width: 420px; max-width: 420px; }
 .gurtos-head-badge { background-color: #2F64A6; color: #F4F2EE; border-radius: 999px; width: 30px; height: 30px; }
 .gurtos-detail { max-width: 150px; margin-left: 8px; }

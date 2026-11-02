@@ -40,7 +40,7 @@ EOF
     ssh "$vm" "cd /opt/box-dev/personal && core/install.sh && personal/install.sh $owner && { $session; sudo -u $owner -E HOME=/home/$owner systemctl --user daemon-reload; sudo -u $owner -E HOME=/home/$owner systemctl --user restart box-desktop.service || true; }"
     ;;
   layer)
-    tar -czf - personal | ssh "$vm" "tar -xzf - -C /opt/box && pkill -u $owner -f '[b]ox-ui.py'; /opt/box/personal/install.sh $owner >/dev/null" # Shell changes take effect at the next login
+    tar -czf - --exclude=personal/screenshots personal | ssh "$vm" "tar -xzf - -C /opt/box && pkill -u $owner -f '[b]ox-ui.py'; /opt/box/personal/install.sh $owner >/dev/null" # Shell changes take effect at the next login
     ;;
   relogin)
     # Log the owner out and back in (GDM automatic login), so a new Shell extension or session loads.

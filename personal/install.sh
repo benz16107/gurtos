@@ -29,7 +29,7 @@ if [[ -n $missing ]]; then
 fi
 
 # The layer's code lives with the box, in /opt/box/personal. A run from a newer checkout updates it.
-[[ $here == /opt/box/personal ]] || rsync -a --delete --exclude node_modules "$here/" /opt/box/personal/
+[[ $here == /opt/box/personal ]] || rsync -a --delete --exclude node_modules --exclude screenshots "$here/" /opt/box/personal/
 
 install -Dm644 "$here/files/dev.box.Box.desktop" /usr/share/applications/dev.box.Box.desktop
 install -Dm644 "$here/icons/dev.box.Box.svg" /usr/share/icons/hicolor/scalable/apps/dev.box.Box.svg
