@@ -12,12 +12,14 @@ import type { App, Approval, ApprovalRoute, Box, FullSpec, Ctx, LogEvent, LogRea
 import { DEFAULT_POLICY, amountOf, approversFor, auditRows, checkPerson, checkSeats, checkShadow, goLiveRules, holds, notifyPeople, parsePolicy, pilot, refusal, route, toCsv, whoOf, type Business, type Person } from './business.ts';
 import { DB, Live } from './live.ts';
 import { Log, apply, approvalId, canMove, doneLayers, fold, plainText, type State } from './log.ts';
-import { ANTHROPIC_PLACEHOLDER, PLACEHOLDER_KEY, Tries, closeProxy, firewall, fromScreen, logBlocked, sourceOf, stopLoggingBlocked, uidOf, relayCert, reservePort, startProxy } from './net.ts';
+import { Tries, closeProxy, firewall, fromScreen, logBlocked, sourceOf, stopLoggingBlocked, uidOf, relayCert, reservePort, startProxy } from './net.ts';
 import * as sandbox from './sandbox.ts';
 import { HOME, dirs } from './sandbox.ts';
-import { MODELS, modelProblem, resolveModel } from './models.ts';
+import { UPSTREAMS, upstreamReady } from './upstreams.ts';
+import { AGENTS, WORKERS, agentBin, agentsDir, plan, splitModel } from './workers/index.ts';
+import type { WorkerDef } from './workers/index.ts';
 import { usageCents } from './pricing.ts';
-import { SETUP_STEPS, applyPatch, folderRefusal, hadHumanUse, hostProblem, loadDisabled, loadSetup, loadSettings, readJson, readState, recordStep, saveDisabled, saveSettings, saveSetup, writeJson, type Settings, type SetupState } from './config.ts';
+import { DEFAULT_SETTINGS, SETUP_STEPS, applyPatch, folderRefusal, hadHumanUse, hostProblem, loadDisabled, loadSetup, loadSettings, readJson, readState, recordStep, saveDisabled, saveSettings, saveSetup, writeJson, type Settings, type SetupState } from './config.ts';
 import * as system from './system.ts';
 import { VAULT_NAME, loadVault, redact, removeVaultKey, secretValues, writeVaultKey } from './vault.ts';
 import { challenge, checkSso, noGroup, personId, provider, random, roleFor, verifyIdToken, whoIs, type Claims, type Sso } from './sso.ts';
@@ -132,12 +134,13 @@ const forbid = (message: string): never => {
 
 /** Try a model key with a free call. Rejected keys are not saved; an unreachable service saves it unchecked. */
 export async function checkModelKey(name: string, value: string): Promise<{ status: 'ok' | 'rejected' | 'unchecked' | 'none'; message?: string }> {
-  if (name !== 'ANTHROPIC_API_KEY') return name === 'FACTORY_API_KEY' ? { status: 'unchecked', message: "Saved. GurtOS can't check a Factory key before its first task." } : { status: 'none' };
+  if (name !== 'ANTHROPIC_API_KEY' && name !== 'OPENAI_API_KEY') return name === 'FACTORY_API_KEY' ? { status: 'unchecked', message: "Saved. GurtOS can't check a Factory key before its first task." } : { status: 'none' };
   if (process.env.BOX_DEMO && value.startsWith('demo-')) return { status: 'unchecked', message: 'Saved. GurtOS couldn\'t check it yet.' };
+  const who = name === 'OPENAI_API_KEY' ? 'OpenAI' : 'Anthropic';
   try {
-    const r = await fetch('https://api.anthropic.com/v1/models?limit=1', { headers: { 'x-api-key': value, 'anthropic-version': '2023-06-01' }, signal: AbortSignal.timeout(6000) });
-    if (r.status === 401 || r.status === 403) return { status: 'rejected', message: "Anthropic didn't accept this key. Check that you copied all of it." };
-    if (r.ok) return { status: 'ok', message: 'Anthropic accepted this key.' };
+    const r = await fetch(`${UPSTREAMS[who.toLowerCase()].origin(DEFAULT_SETTINGS)}/v1/models?limit=1`, { headers: who === 'OpenAI' ? { authorization: `Bearer ${value}` } : { 'x-api-key': value, 'anthropic-version': '2023-06-01' }, signal: AbortSignal.timeout(6000) });
+    if (r.status === 401 || r.status === 403) return { status: 'rejected', message: `${who} didn't accept this key. Check that you copied all of it.` };
+    if (r.ok) return { status: 'ok', message: `${who} accepted this key.` };
     return { status: 'unchecked', message: "Saved. GurtOS couldn't check it yet." };
   } catch {
     return { status: 'unchecked', message: "Saved. GurtOS couldn't check it yet." };
@@ -415,7 +418,7 @@ class Core {
     const missing: { id: string; text: string }[] = [];
     if (!this.modelVia()) missing.push({ id: 'key', text: 'No model key yet: set ANTHROPIC_API_KEY or FACTORY_API_KEY.' });
     const droid = system.droidState(); // still downloading on a new image is fine: tasks wait for it
-    if (droid.state === 'missing') missing.push({ id: 'droid', text: droid.message });
+    if (droid.state === 'missing' && this.defaultAgent() === 'droid') missing.push({ id: 'droid', text: droid.message });
     if (system.edition(this.owner, this.business.on) === 'personal' && !this.owner) missing.push({ id: 'owner', text: 'No owner yet.' });
     if (!this.devices.some((d) => !d.revoked && d.kind !== 'setup' && d.kind !== 'watch')) missing.push({ id: 'phone', text: 'No phone paired yet: run pair and scan the code.' });
     return { ok: !missing.length, missing };
@@ -596,7 +599,7 @@ class Core {
 
   /** `app` is the app (track) whose box made the task, whatever `source` it gave: it answers that task's requests. */
   async createTask(spec: TaskSpec, requestedBy?: string, app?: string): Promise<Task> {
-    const known = ['title', 'prompt', 'workspace', 'worker', 'tools', 'hosts', 'budgetCents', 'source', 'folder', 'folders', 'seat', 'droid', 'model', 'files'];
+    const known = ['title', 'prompt', 'workspace', 'worker', 'agent', 'tools', 'hosts', 'budgetCents', 'source', 'folder', 'folders', 'seat', 'droid', 'model', 'files'];
     const unknown = Object.keys(spec ?? {}).filter((k) => !known.includes(k));
     if (unknown.length) throw new Error(`unknown task field${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')} (known: ${known.join(', ')})`);
     // Files shared to a new task (the Mac app's Share menu) get a workspace of their own, named by the box; the log
@@ -609,7 +612,13 @@ class Core {
     }
     // What a task does not name comes from the owner's settings: the budget and the network it gets.
     const dflt = { hosts: this.settings.networkDefault === 'allowlist' ? this.settings.defaultHosts : [], budgetCents: this.settings.defaultBudgetCents };
-    const s: FullSpec = { workspace: 'home', worker: 'droid', tools: [], source: 'api', ...spec, hosts: spec.hosts ?? dflt.hosts, budgetCents: spec.budgetCents ?? dflt.budgetCents };
+    // `agent` is the name the screens use for `worker`. A task that names neither gets the owner's default agent.
+    if (spec.agent !== undefined) {
+      const { agent, ...rest } = spec;
+      if (rest.worker !== undefined && rest.worker !== agent) throw new Error('agent and worker are two names for one thing: send one of them');
+      spec = { ...rest, worker: agent };
+    }
+    const s: FullSpec = { workspace: 'home', worker: this.defaultAgent(), tools: [], source: 'api', ...spec, hosts: spec.hosts ?? dflt.hosts, budgetCents: spec.budgetCents ?? dflt.budgetCents };
     if (!s.title || !s.prompt) throw new Error('a task needs a title and a prompt');
     if (s.droid !== undefined) {
       const { plan, autonomy, ...rest } = s.droid as Record<string, unknown>;
@@ -631,11 +640,20 @@ class Core {
     s.hosts = s.hosts.map((h) => h.toLowerCase());
     if (!Array.isArray(s.tools) || s.tools.some((x) => typeof x !== 'string')) throw new Error('tools: a list of tool names');
     if (!/^[\w.-]+$/.test(s.workspace) || !fs.existsSync(dirs.workspace(s.workspace))) throw new Error(`no workspace ${s.workspace}`);
-    if (!['droid', 'fake'].includes(s.worker)) throw new Error(`no worker ${s.worker}`);
-    const why = modelProblem(s.model);
-    if (why) throw new Error(why);
-    if (s.worker === 'droid') s.model = resolveModel(s.model); // the task records the exact model it ran on, the default too
-    else delete s.model; // a scripted worker runs no model
+    const def = typeof s.worker === 'string' && Object.hasOwn(WORKERS, s.worker) ? WORKERS[s.worker] : undefined;
+    if (!def) throw new Error(`no worker ${String(s.worker).slice(0, 40)} (known: ${Object.keys(WORKERS).join(', ')})`);
+    if (s.droid !== undefined && def.name !== 'droid' && def.name !== 'fake') throw new Error(`droid: plan and autonomy are Droid's own options; ${def.title} has none`);
+    delete s.model; // a scripted worker runs no model
+    if (def.upstreams.length) {
+      // The task records the exact model it ran on, the default too. With no model service set up yet the name is
+      // still checked (against the agent's first one), and the task fails when it starts, with the reason.
+      const usable = (u: string) => this.usable(def, u);
+      const p = plan(def, spec.model, def.upstreams.some(usable) ? usable : () => true);
+      const named = splitModel(spec.model).upstream;
+      // A local model or the owner's endpoint is kept in front of the id, so the task goes back there and is priced as that.
+      const front = named ?? (['ollama', 'custom'].includes(p.upstream) ? p.upstream : undefined);
+      if (p.model !== undefined) s.model = front ? `${front}/${p.model}` : p.model;
+    }
     if (s.seat !== undefined && (typeof s.seat !== 'string' || !s.seat.trim() || s.seat.length > 60)) throw new Error('seat: text, at most 60 characters, like "Credit analyst"');
     // A demo run spends no Factory credit unless it was asked to: a track that wants a real agent must be gated behind DEMO_LIVE=droid.
     if (s.worker === 'droid' && process.env.BOX_NO_DROID) throw new Error('real Droid is off in this demo run (it spends Factory credit); DEMO_LIVE=droid ./demo, or ./demo --live-droid, turns it on');
@@ -670,13 +688,16 @@ class Core {
   async start(t: Task) {
     if (this.paused) return; // the kill switch is on: it starts when someone resumes the agents
     try {
-      if (t.worker === 'droid') {
-        if (!this.modelVia()) this.vault = loadVault(); // a key added to the file by hand since boot
-        if (!this.modelVia()) throw new Error('No model key yet. Add an Anthropic or Factory API key in Settings, Accounts & Keys, then start the task again.');
-        // An image downloads Droid after its first start (its license forbids shipping it in the image): a task waits for it.
-        const droid = system.droidState();
-        if (droid.state === 'missing') throw new Error(droid.message);
-        if (droid.state !== 'ready') return this.waitForDroid(t, droid.message);
+      const def = WORKERS[t.worker];
+      let via: { upstream: string; model?: string } | undefined; // where its model calls go; none for a scripted task
+      if (def.upstreams.length) {
+        if (!def.upstreams.some((u) => this.usable(def, u))) this.vault = loadVault(); // a key added to the file by hand since boot
+        via = plan(def, t.model, (u) => this.usable(def, u));
+        // An agent's command is fetched after the box starts (Droid by the image, its license forbids shipping it; the
+        // others by the box the first time a task needs them): a task waits for it.
+        const agent = this.agentState(def);
+        if (agent.state === 'missing') throw new Error(agent.message);
+        if (agent.state !== 'ready') return this.waitForAgent(t, agent.message);
       }
       sandbox.kill(t); // a worker left over from a core that died without the box rebooting
       // A linked (real-folder) workspace is not layer-stacked: each task starts from the real folder, and
@@ -700,29 +721,13 @@ class Core {
         AWS_ACCESS_KEY_ID: this.decoy(t.id).id, // the tripwire: a decoy, never a real key
         AWS_SECRET_ACCESS_KEY: this.decoy(t.id).secret,
       };
-      let byok: string | undefined; // the model id, when the task runs on the owner's own Anthropic key
-      if (t.worker === 'droid') {
-        const via = this.modelVia();
-        // The task holds placeholders. The proxy swaps in the real key on the way to Factory or Anthropic.
-        if (via === 'anthropic') byok = resolveModel(t.model);
-        Object.assign(env, {
-          FACTORY_API_KEY: PLACEHOLDER_KEY, // the SDK wants one even when the model is the owner's own key
-          FACTORY_API_BASE_URL: proxy,
-          FACTORY_EXTRA_CA_CERTS: this.relay.caPem,
-          NODE_EXTRA_CA_CERTS: this.relay.caPem,
-          FACTORY_RIPGREP_PATH: '/usr/bin/rg',
-          BOX_MODEL: byok ? `custom:${byok}` : resolveModel(t.model),
-          ...(process.env.BOX_REVIEW ? { BOX_REVIEW: process.env.BOX_REVIEW } : {}),
-        });
-      }
+      // The task holds placeholders. The proxy puts the real key in on the way to the model service.
+      const ctx = via && { ...via, wire: UPSTREAMS[via.upstream].wires(this.settings).find((w) => def.wires.includes(w))!, base: (u: string) => `${proxy}/up/${u}`, home: path.join(dirs.task(t.id), 'home'), socket: dirs.socket(t.id), caPem: this.relay.caPem, proxy };
+      if (ctx) Object.assign(env, def.env(ctx), def.cmd ? { BOX_AGENT_BIN: agentBin(def) } : {}, process.env.BOX_REVIEW ? { BOX_REVIEW: process.env.BOX_REVIEW } : {});
       const ids = await sandbox.prepare(t);
-      if (byok) {
-        // Droid reads its own-key models from the task user's ~/.factory/settings.json; the key there is a placeholder.
-        // The task's model, plus Haiku for the second-pair-of-eyes check (core/workers/review.ts).
-        const customModels = [...new Set([byok, MODELS.haiku])].map((model) => ({ model, displayName: 'Claude (your Anthropic key)', baseUrl: 'https://api.anthropic.com', apiKey: ANTHROPIC_PLACEHOLDER, provider: 'anthropic', maxOutputTokens: 8192 }));
-        // The task's processes were stopped above, and its home is its own: never write through a link it left there.
-        sandbox.writeHomeFile(t, ids, '.factory/settings.json', JSON.stringify({ customModels }));
-      }
+      // The agent's own settings, in the task's home. The task's processes were stopped above, and its home is its
+      // own: never write through a link it left there.
+      if (ctx) for (const [rel, text] of Object.entries(def.files?.(ctx) ?? {})) sandbox.writeHomeFile(t, ids, rel, text);
       sandbox.snapshotBase(t);
       this.uidTask.set(ids.uid, t.id);
       stopLoggingBlocked(t.id); // a task resumed after the core restarted (not the machine) still has its old rule
@@ -760,7 +765,7 @@ class Core {
         try {
           if (t.state === 'running' || t.state === 'waiting') {
             const why = code === 0 ? undefined : sandbox.workerError(t);
-            this.move(t, code === 0 ? 'done' : 'failed', code === 0 ? {} : { error: system.failureText(why, signal ?? code, this.modelVia() ?? undefined, t.worker) });
+            this.move(t, code === 0 ? 'done' : 'failed', code === 0 ? {} : { error: system.failureText(why, signal ?? code, via?.upstream, t.worker) });
             // A task on the owner's real folder waits for their Keep or Undo.
             if (code === 0 && sandbox.isLinked(t.workspace)) this.write({ type: 'keep', task: t.id, result: 'pending' });
           }
@@ -777,24 +782,70 @@ class Core {
     }
   }
 
-  /** Droid tasks waiting for the image to finish downloading Droid, and the timer that starts them once it is here. */
+  /** Whether this agent's tasks can use this upstream now: it is set up, and speaks a format the agent sends. */
+  usable(def: WorkerDef, upstream: string) {
+    const u = UPSTREAMS[upstream];
+    return upstreamReady(u, this.settings, (k) => this.vault.get(k)) && u.wires(this.settings).some((w) => def.wires.includes(w));
+  }
+
+  /** The agent of a task that names none: the owner's choice, or the first that has a model service (Droid when none has). */
+  defaultAgent(): string {
+    if (this.settings.defaultAgent !== 'auto') return this.settings.defaultAgent;
+    return AGENTS().find((n) => WORKERS[n].upstreams.some((u) => this.usable(WORKERS[n], u))) ?? 'droid';
+  }
+
+  /**
+   * Whether an agent's command is here. Droid comes with the machine's setup (system.droidState). The others the box
+   * installs itself, from npm at the version in workers/index.ts, the first time a task needs one: asking for the
+   * state of one that is missing starts that.
+   */
+  installing = new Set<string>();
+  installFailed = new Map<string, string>();
+  agentState(def: WorkerDef, install = true): { state: string; message: string } {
+    if (def.name === 'droid') return system.droidState();
+    if (!def.pkg || fs.existsSync(agentBin(def))) return { state: 'ready', message: `${def.title} is ready.` };
+    const failed = this.installFailed.get(def.name);
+    if (failed && !install) return { state: 'missing', message: failed };
+    if (!this.installing.has(def.name)) {
+      if (!install) return { state: 'absent', message: `${def.title} is installed the first time a task uses it.` };
+      this.installing.add(def.name);
+      this.installFailed.delete(def.name);
+      const dir = path.join(agentsDir(), def.name);
+      fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+      const out = fs.openSync(path.join(dir, 'install.log'), 'a');
+      // As root, outside any task: the package is the vendor's own, pinned to one version. Tasks only run it.
+      const npm = spawn('npm', ['install', '--prefix', dir, '--no-audit', '--no-fund', '--no-update-notifier', '--loglevel=error', def.pkg], { stdio: ['ignore', out, out], env: { ...process.env, PATH: `${path.dirname(process.execPath)}:${process.env.PATH ?? '/usr/bin:/bin'}` } });
+      const ended = (ok: boolean) => {
+        fs.closeSync(out);
+        this.installing.delete(def.name);
+        if (!ok || !fs.existsSync(agentBin(def))) this.installFailed.set(def.name, `${def.title} could not be installed (npm install ${def.pkg} failed; see ${path.join(dir, 'install.log')}). Check this computer's internet connection, then start the task again.`);
+      };
+      npm.once('error', () => ended(false));
+      npm.once('exit', (code) => ended(code === 0));
+    }
+    return { state: 'downloading', message: `${def.title} is downloading. The task starts once it is here.` };
+  }
+
+  /** Tasks waiting for their agent's command to arrive, and the timer that starts them once it is here. */
   droidWaiting = new Set<string>();
   droidTimer?: NodeJS.Timeout;
-  waitForDroid(t: Task, message: string) {
+  waitForAgent(t: Task, message: string) {
     if (!this.droidWaiting.has(t.id)) {
       this.droidWaiting.add(t.id);
       this.write({ type: 'task.step', task: t.id, text: message }); // what the task list shows while it waits
     }
     this.droidTimer ??= setInterval(() => {
-      if (system.droidState().state !== 'ready') return;
+      // Each task whose agent is here now, or could not be fetched, starts again: start() runs it or fails it with the reason.
+      for (const id of [...this.droidWaiting]) {
+        const w = this.state.tasks.get(id);
+        const live = w && (w.state === 'queued' || w.state === 'running' || w.state === 'waiting');
+        if (live && !['ready', 'missing'].includes(this.agentState(WORKERS[w.worker], false).state)) continue;
+        this.droidWaiting.delete(id);
+        if (live) void this.start(w);
+      }
+      if (this.droidWaiting.size) return;
       clearInterval(this.droidTimer);
       this.droidTimer = undefined;
-      const ids = [...this.droidWaiting];
-      this.droidWaiting.clear();
-      for (const id of ids) {
-        const w = this.state.tasks.get(id);
-        if (w && (w.state === 'queued' || w.state === 'running' || w.state === 'waiting')) void this.start(w);
-      }
     }, 5000).unref();
   }
 
@@ -1906,6 +1957,7 @@ class Core {
       owner: this.owner,
       model: { ready: !!this.modelVia(), via: this.modelVia() },
       droid: system.droidState(),
+      agents: this.agentsView(),
       ...(this.business.on ? { company: this.business.company } : {}),
       paused: this.pauseView(),
       startedAt: this.startedAt,
@@ -1913,14 +1965,28 @@ class Core {
     };
   }
 
-  /** Which model key the box will use: Factory's if it has one, else the owner's own Anthropic key. */
-  modelVia(): 'factory' | 'anthropic' | null {
-    return this.vault.get('FACTORY_API_KEY') ? 'factory' : this.vault.get('ANTHROPIC_API_KEY') ? 'anthropic' : null;
+  /** Which model service the box will use: Factory if it has that key, else the owner's own Anthropic key, else the first other one that is set up. */
+  modelVia(): string | null {
+    return ['factory', 'anthropic', 'openai', 'custom', 'ollama'].find((u) => upstreamReady(UPSTREAMS[u], this.settings, (k) => this.vault.get(k))) ?? null;
+  }
+
+  /** The agents a task can run on, for the picker: which can start now, which model services each uses, and the default. */
+  agentsView() {
+    return {
+      default: this.defaultAgent(),
+      setting: this.settings.defaultAgent,
+      list: AGENTS().map((name) => {
+        const def = WORKERS[name];
+        const via = def.upstreams.filter((u) => this.usable(def, u));
+        return { name, title: def.title, upstreams: def.upstreams, via, ready: via.length > 0, installed: this.agentState(def, false).state === 'ready' };
+      }),
+      upstreams: Object.values(UPSTREAMS).map((u) => ({ id: u.id, title: u.title, ready: upstreamReady(u, this.settings, (k) => this.vault.get(k)), ...(u.vaultKey ? { key: u.vaultKey, keySet: this.vault.has(u.vaultKey) } : {}) })),
+    };
   }
 
   /** The setup state with the suggested step order. Until `done`, the box's screen shows the wizard. */
   setupView() {
-    return { model: { ready: !!this.modelVia(), via: this.modelVia() }, droid: system.droidState(), modelKey: !!this.modelVia(), done: this.setup.done, finishedAt: this.setup.finishedAt ?? null, migrated: this.setup.migrated ?? false, steps: this.setup.steps, suggested: SETUP_STEPS, channel: this.channelView() };
+    return { model: { ready: !!this.modelVia(), via: this.modelVia() }, droid: system.droidState(), agents: this.agentsView(), modelKey: !!this.modelVia(), done: this.setup.done, finishedAt: this.setup.finishedAt ?? null, migrated: this.setup.migrated ?? false, steps: this.setup.steps, suggested: SETUP_STEPS, channel: this.channelView() };
   }
 
   // ---------- pairing a phone, and listing every box ----------
@@ -2867,8 +2933,8 @@ data: ${JSON.stringify(e)}
         this.tripwire(t, 'a web request');
         return true;
       },
-      factoryKey: () => this.vault.get('FACTORY_API_KEY'),
-      anthropicKey: () => this.vault.get('ANTHROPIC_API_KEY'),
+      key: (name) => this.vault.get(name),
+      config: () => this.settings,
     }, this.relay);
     try {
       firewall(this.proxyPort); // once the proxy listens: its port is the one tasks may reach

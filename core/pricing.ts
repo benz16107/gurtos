@@ -29,6 +29,9 @@ const PRICES: Record<string, Price> = {
 };
 
 function priceFor(model: string): Price {
+  if (model.startsWith('ollama/')) return { in: 0, out: 0, cacheWrite: 0, cacheRead: 0 }; // a local model costs nothing a call
+  // shortcut: a model with no price here (OpenAI's, or one on the owner's own endpoint) is counted at Sonnet's rates,
+  // so its tokens still count toward the task's budget; add its real rates to PRICES when it matters.
   const exact = Object.keys(PRICES).find((name) => model.includes(name));
   if (exact) return PRICES[exact];
   return PRICES['claude-sonnet-5-5']; // the box's default model

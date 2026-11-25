@@ -2,11 +2,13 @@
 // task reach only its own hosts. It knows the caller by the uid that owns the connection, so tasks carry
 // no token.
 //
-// It also relays Droid's calls to Factory, so a task only ever holds a placeholder key. Droid sends some
-// calls to FACTORY_API_BASE_URL (pointed here, plain HTTP) and its model calls to prem.factory.ai over
-// HTTPS. For those the proxy answers TLS itself, with a certificate from the box's own CA, which only Droid
-// tasks are told to trust. Either way the proxy swaps the placeholder for the vault's key and forwards
-// the call over real TLS.
+// It also relays every agent's model calls, so a task only ever holds a placeholder key. An agent is pointed at
+// http://127.0.0.1:<this port>/up/<upstream>/... (plain HTTP on loopback). The proxy checks that the task's agent may
+// use that upstream (upstreams.ts, workers/index.ts), reads the call, puts the vault's key in and sends it on.
+//
+// Droid is the one agent that does not take a base address for everything. It sends some calls to
+// FACTORY_API_BASE_URL (pointed here, plain HTTP) and its model calls to prem.factory.ai over HTTPS. For those the
+// proxy answers TLS itself, with a certificate from the box's own CA, which only Droid tasks are told to trust.
 import { execFileSync } from 'node:child_process';
 import dns from 'node:dns/promises';
 import fs from 'node:fs';
@@ -17,6 +19,9 @@ import os from 'node:os';
 import path from 'node:path';
 import tls from 'node:tls';
 import type { Task } from './contract.ts';
+import { UPSTREAMS, WIRE_PATHS, keyed } from './upstreams.ts';
+import type { UpstreamConfig } from './upstreams.ts';
+import { WORKERS } from './workers/index.ts';
 
 // The installed box uses 8888. BOX_PROXY_PORT=auto (the demo) takes a free one in 8800-8887. Task users may reach only
 // the ports in use by a box's proxy (the nftables set `proxies`), never anything else that listens in this range.
@@ -33,9 +38,8 @@ const ANTHROPIC = 'api.anthropic.com';
  */
 const FACTORY_PATHS = /^\/api\/(llm\/|cli\/|feature-flags$|organization\/managed-settings$|billing\/limits$|connectors\/tools\/list$|apps\/cloud-sync\/sessions\/batch$|ingest$)/;
 export const factoryPath = (p: string) => FACTORY_PATHS.test(p);
-/** The Anthropic paths Droid calls with the owner's own key: messages (and counting their tokens) and the model list. */
-const ANTHROPIC_PATHS = /^\/v1\/(messages(\/count_tokens)?|models(\/[\w.@:-]+)?)$/;
-export const anthropicPath = (p: string) => ANTHROPIC_PATHS.test(p);
+/** The Anthropic paths an agent calls with the owner's own key: messages (and counting their tokens) and the model list. */
+export const anthropicPath = (p: string) => WIRE_PATHS.anthropic.test(p);
 /** A model call's body is read before it goes on (fetchesOnItsOwn): at most 32 MB each (Anthropic's own limit), 64 MB a task at once. */
 export const MAX_MODEL_BODY = 32 * 1024 ** 2;
 export const MAX_MODEL_HELD = 64 * 1024 ** 2;
@@ -330,19 +334,28 @@ export async function destination(hosts: string[], host: string, port: string): 
 }
 
 /**
- * Why a model call asks the model service to reach the internet for the task, or undefined. A web fetch tool, an MCP
- * server or a file by URL would be fetched from the service's side, to any host, around the task's allow-list. Droid
- * sends none of them (its tools run in the task). What the model wrote into its own earlier tool calls is not looked at.
+ * Why a model call asks the model service to reach the internet for the task, or undefined. A web search or web fetch
+ * tool that runs on the service's side (Anthropic's web_search and web_fetch, OpenAI's web_search), an MCP server or a
+ * file by URL would be fetched from there, to any host, around the task's allow-list. A web tool passes only when it
+ * names its `allowed_domains` and the task may reach every one of them (`hosts`). What the model wrote into its own
+ * earlier tool calls is not looked at.
  */
-export function fetchesOnItsOwn(body: unknown): string | undefined {
+export function fetchesOnItsOwn(body: unknown, hosts: string[] = []): string | undefined {
   const web = (v: unknown) => typeof v === 'string' && /^\s*https?:/i.test(v);
   const walk = (v: unknown): string | undefined => {
     if (Array.isArray(v)) return v.map(walk).find(Boolean);
     if (!v || typeof v !== 'object') return undefined;
     const o = v as Record<string, unknown>;
     if (o.mcp_servers !== undefined) return 'an MCP server';
+    if (o.web_search_options !== undefined) return 'a web search';
     const type = typeof o.type === 'string' ? o.type : '';
-    if (/^(web_fetch|mcp$)/.test(type)) return `a ${type} tool`;
+    // The tool itself (web_search_20250305, web_fetch_20250910, web_search, web_search_preview), not its results in the history.
+    if (/^web_(search|fetch)(_preview)?(_[\d_]+)?$/.test(type)) {
+      const domains = o.allowed_domains ?? (o.filters as { allowed_domains?: unknown } | undefined)?.allowed_domains;
+      const inList = Array.isArray(domains) && domains.length > 0 && domains.every((d) => typeof d === 'string' && allowed(hosts, d.toLowerCase(), '443'));
+      if (!inList) return `a ${type} tool`;
+    }
+    if (type === 'mcp') return 'a mcp tool';
     if (type === 'url' || web(o.image_url) || web(o.file_url) || web((o.image_url as { url?: unknown } | undefined)?.url)) return 'a file by its address';
     return Object.entries(o).filter(([k]) => !(k === 'input' && /tool_use$/.test(type))).map(([, x]) => walk(x)).find(Boolean);
   };
@@ -366,8 +379,20 @@ export interface ProxyHooks {
   blocked(task: Task, host: string): void;
   /** True when the task's decoy key is in this request (the box then stops the task): the request is refused. */
   leaked(task: Task, text: string): boolean;
-  factoryKey(): string | undefined;
-  anthropicKey(): string | undefined;
+  /** A vault value by name, for the key headers of a model call. */
+  key(name: string): string | undefined;
+  /** The owner's settings that say where Ollama and their own endpoint are. */
+  config(): UpstreamConfig;
+}
+
+/** One model call on its way out: where it goes, which paths go, which are read first, and its headers with the key in. */
+interface Relay {
+  origin: string;
+  paths(p: string): boolean;
+  reads(p: string): boolean;
+  headers: http.OutgoingHttpHeaders;
+  /** What the box relays here, for the refusal. */
+  only: string;
 }
 
 /** Start the proxy. Resolves to its port. */
@@ -404,18 +429,42 @@ export async function startProxy(hooks: ProxyHooks, cert: { key: Buffer; cert: B
   /** A call to Factory or Anthropic from a Droid task: the placeholder key becomes the real one, and only here. */
   const toFactory = (req: http.IncomingMessage, res: http.ServerResponse, host: string, t?: Task) => {
     const anthropic = host === ANTHROPIC;
-    const key = anthropic ? hooks.anthropicKey() : hooks.factoryKey();
+    const key = hooks.key(anthropic ? 'ANTHROPIC_API_KEY' : 'FACTORY_API_KEY');
     if (!key) return fail(res, 503, `the vault has no ${anthropic ? 'ANTHROPIC_API_KEY' : 'FACTORY_API_KEY'}`);
-    const u = new URL(req.url ?? '/', 'http://x');
-    const p = u.pathname;
-    const to = p + u.search; // checked and sent as one normalized path, so the service can't read it another way
-    if (anthropic ? !ANTHROPIC_PATHS.test(p) : !FACTORY_PATHS.test(p)) {
-      if (t) hooks.blocked(t, `${host}${p}`.slice(0, 200));
-      return fail(res, 403, `blocked by the box: GurtOS relays only the ${anthropic ? 'Anthropic' : 'Factory'} calls Droid makes`);
-    }
     const headers = withKey(req.headers, host, anthropic ? ANTHROPIC_PLACEHOLDER : PLACEHOLDER_KEY, key);
+    toModel(req, res, req.url ?? '/', { origin: `https://${host}`, paths: anthropic ? anthropicPath : factoryPath, reads: (p) => anthropic || p.startsWith('/api/llm/'), headers, only: `the ${anthropic ? 'Anthropic' : 'Factory'} calls Droid makes` }, t);
+  };
+
+  /** A call to /up/<id>/...: any agent's model call. The task's agent must be allowed that upstream, and it must be set up. */
+  const toUpstream = (req: http.IncomingMessage, res: http.ServerResponse, id: string, rest: string, t: Task) => {
+    const u = UPSTREAMS[id];
+    if (!u || id === 'factory' || !WORKERS[t.worker]?.upstreams.includes(id)) {
+      hooks.blocked(t, `model service ${id}`.slice(0, 200));
+      return fail(res, 403, "blocked by the box: this task's agent may not use that model service");
+    }
+    const cfg = hooks.config();
+    const origin = u.origin(cfg);
+    const key = u.vaultKey ? hooks.key(u.vaultKey) : undefined;
+    if (!origin || (u.keyRequired && !key)) return fail(res, 503, `${u.title} is not set up on this GurtOS computer${u.vaultKey && origin ? ` (the vault has no ${u.vaultKey})` : ''}`);
+    const wires = u.wires(cfg);
+    toModel(req, res, rest, { origin, paths: (p) => wires.some((w) => WIRE_PATHS[w].test(p)), reads: () => true, headers: keyed(req.headers, new URL(origin).host, u, key), only: `model calls to ${u.title}` }, t);
+  };
+
+  /** Check a model call and send it on. `url` is its path at the service. */
+  const toModel = (req: http.IncomingMessage, res: http.ServerResponse, url: string, o: Relay, t?: Task) => {
+    const base = new URL(o.origin);
+    const host = base.host;
+    const { headers } = o;
+    const u = new URL(url, 'http://x');
+    const p = u.pathname;
+    const to = base.pathname.replace(/\/$/, '') + p + u.search; // checked and sent as one normalized path, so the service can't read it another way
+    const request = (h: http.OutgoingHttpHeaders) => (base.protocol === 'https:' ? https : http).request({ host: base.hostname, port: base.port || undefined, path: to, method: req.method, headers: h });
+    if (!o.paths(p)) {
+      if (t) hooks.blocked(t, `${host}${p}`.slice(0, 200));
+      return fail(res, 403, `blocked by the box: GurtOS relays only ${o.only}`);
+    }
     // A model call is read first, so the model service never fetches anything for the task (fetchesOnItsOwn).
-    if (!anthropic && !p.startsWith('/api/llm/')) return forward(req, res, https.request({ host, path: to, method: req.method, headers }));
+    if (!o.reads(p)) return forward(req, res, request(headers));
     // Only a body the box can read goes on: a compressed one would carry a fetch past the check.
     const encoding = String(req.headers['content-encoding'] ?? 'identity').trim().toLowerCase();
     if (encoding !== 'identity') {
@@ -449,7 +498,7 @@ export async function startProxy(hooks: ProxyHooks, cert: { key: Buffer; cert: B
       const body = Buffer.concat(chunks);
       let why: string | undefined;
       try {
-        why = body.length ? fetchesOnItsOwn(JSON.parse(body.toString())) : undefined;
+        why = body.length ? fetchesOnItsOwn(JSON.parse(body.toString()), t?.hosts) : undefined;
       } catch {
         // Not JSON: the box cannot tell what it asks the service to fetch, so it does not go.
         if (t) hooks.blocked(t, `${host}${p} (a body that is not JSON)`.slice(0, 200));
@@ -460,7 +509,7 @@ export async function startProxy(hooks: ProxyHooks, cert: { key: Buffer; cert: B
         return fail(res, 403, `blocked by the box: a model call may not ask the model service to fetch ${why} for the task`);
       }
       const { 'transfer-encoding': _chunked, ...sized } = headers;
-      const up = https.request({ host, path: to, method: req.method, headers: { ...sized, 'content-length': String(body.length) } });
+      const up = request({ ...sized, 'content-length': String(body.length) });
       up.on('response', (r) => (r.on('error', () => res.destroy()), res.writeHead(r.statusCode ?? 502, r.headers), r.pipe(res)));
       up.on('error', () => fail(res, 502, 'upstream failed'));
       up.end(body);
@@ -478,6 +527,9 @@ export async function startProxy(hooks: ProxyHooks, cert: { key: Buffer; cert: B
   const server = http.createServer((req, res) => {
     const t = who(req.socket);
     if (!t) return fail(res, 403, 'not a task');
+    // An agent's model calls arrive as /up/<upstream>/<the service's own path>.
+    const up = /^\/up\/([\w-]+)(\/.*)$/.exec(req.url ?? '');
+    if (up) return toUpstream(req, res, up[1], up[2], t);
     // FACTORY_API_BASE_URL points here, so Droid's API calls arrive as plain paths.
     if (req.url?.startsWith('/')) {
       if (t.worker !== 'droid') return fail(res, 403, 'no Factory access for this task');
