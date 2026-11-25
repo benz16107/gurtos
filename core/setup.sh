@@ -130,4 +130,4 @@ if [ "$(cat $unit 2>/dev/null)" != "$want" ]; then
   systemctl enable spacetimedb.service >/dev/null 2>&1
   systemctl restart spacetimedb.service
 fi
-spacetime --version | head -1
+spacetime --version 2>/dev/null | head -1 # its "new version available" notice is on stderr

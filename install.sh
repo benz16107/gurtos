@@ -72,6 +72,7 @@ install() {
   again=''
   [ ! -f /etc/systemd/system/box.service ] || again=1
   packages=$(for p in git rsync curl ca-certificates xz-utils acl python3 nftables ripgrep; do dpkg -s "$p" >/dev/null 2>&1 || printf '%s ' "$p"; done)
+  packages=${packages% }
   node_now=$(command -v node >/dev/null && node -p 'process.versions.node.split(".")[0] >= 22 ? process.version : ""' 2>/dev/null || true)
 
   if [ -n "$again" ]; then say "GurtOS is installed here already. This updates it and keeps your tasks, keys and settings. It will:"; else say "This installs GurtOS on this machine. It will:"; fi
@@ -97,7 +98,7 @@ install() {
     say "installing $packages"
     $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update -qq
     # shellcheck disable=SC2086
-    $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $packages >/dev/null
+    $SUDO env DEBIAN_FRONTEND=noninteractive NEEDRESTART_SUSPEND=1 apt-get install -y -qq $packages >/dev/null
   fi
 
   if [ "$src" = /opt/gurtos ]; then
