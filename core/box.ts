@@ -1982,6 +1982,7 @@ class Core {
       product: 'GurtOS',
       edition,
       editionName: `GurtOS ${edition[0].toUpperCase()}${edition.slice(1)}`,
+      install: system.isImage() ? 'image' : 'checkout', // an image updates as a whole system; a checkout by running install.sh again
       version: v.version,
       build: v.build,
       hostname: os.hostname(),

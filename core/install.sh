@@ -17,7 +17,7 @@ rsync -a --delete --exclude node_modules --exclude screenshots \
   --include '/portal/' --include '/portal/dist/***' --include '/portal/package.json' \
   --include '/package.json' --include '/package-lock.json' --include '/VERSION' --include '/LICENSE' --include '/NOTICE' \
   --exclude '*' ./ /opt/box/
-(cd /opt/box && npm ci --omit=dev --no-audit --no-fund --no-update-notifier --loglevel=error)
+(cd /opt/box && npm ci --omit=dev --cache /var/cache/gurtos-npm --no-audit --no-fund --no-update-notifier --loglevel=error) # its own cache, so uninstall can take it out
 [ -f /etc/box/vault.env ] || install -m 600 /dev/null /etc/box/vault.env
 # Members act as this computer's own screen from loopback, with the owner's rights (core/net.ts trustedUid).
 getent group gurtos >/dev/null || groupadd --system gurtos

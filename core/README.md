@@ -424,7 +424,7 @@ The `owner` flag is ignored from anyone who is not already the owner.
 
 | Request | Does |
 |---|---|
-| `GET /api/system` | `{product, edition, editionName, version, build, hostname, timezone, network: {online, interfaces}, boxId, boxName, owner, model, droid, paused, startedAt, uptimeSec}`. `build` is the commit `./deploy` installed. |
+| `GET /api/system` | `{product, edition, editionName, install, version, build, hostname, timezone, network: {online, interfaces}, boxId, boxName, owner, model, droid, paused, startedAt, uptimeSec}`. `build` is the commit `./deploy` installed. `install` is `image` (a GurtOS image, updated as a whole system) or `checkout` (installed on Ubuntu with `install.sh`). |
 | `GET /api/setup` | `{model, droid, modelKey, done, finishedAt, migrated, steps: {id: {at, data?}}, suggested: [...], channel}`. **Until `done`, the box's screen shows the wizard.** `modelKey` is false until the vault holds `ANTHROPIC_API_KEY` or `FACTORY_API_KEY`; without one no Droid task can start, so the wizard should ask for it (`PUT /api/vault/<NAME>`, which takes effect at once). `droid` is where Droid's download stands (above). A box that already ran tasks when this arrived is `migrated` and counts as done. |
 | `POST /api/setup/step {id, data?}` | Records a step as taken (any id like `network`; `suggested` lists the usual ones). `data` is at most 4 KB and is for answers, not keys: keys go to the vault. |
 | `POST /api/setup/finish`, `POST /api/setup/reopen` | Mark setup done, or show the wizard again. |
