@@ -1,5 +1,5 @@
 // The action log in words, and a task's diff. Shared by Tasks, Activity and Time Machine.
-import { box, type LogEvent, type Task } from '../live.ts';
+import { agentTitle, box, type LogEvent, type Task } from '../live.ts';
 import { STATE, clock, dollars, who } from '../util.ts';
 import { STEPS } from '../setup.tsx';
 import './windows.css';
@@ -74,7 +74,7 @@ export function describe(e: LogEvent, events: LogEvent[]): { text: string; data:
     case 'task.created': {
       const s = e.spec;
       return {
-        text: `Started by ${s.source}, ${s.worker === 'droid' ? 'a Claude agent' : 'a scripted agent (test)'}, ${s.hosts.length ? `may reach ${s.hosts.join(', ')}` : 'no internet'}${s.budgetCents ? `, budget ${dollars(s.budgetCents)}` : ''}`,
+        text: `Started by ${s.source}, ${s.worker === 'fake' ? 'a scripted agent (test)' : `run by ${agentTitle(s.worker)}`}, ${s.hosts.length ? `may reach ${s.hosts.join(', ')}` : 'no internet'}${s.budgetCents ? `, budget ${dollars(s.budgetCents)}` : ''}`,
         data: `task.created  user ${e.user}  hosts ${s.hosts.join(' ') || 'none'}`,
       };
     }
