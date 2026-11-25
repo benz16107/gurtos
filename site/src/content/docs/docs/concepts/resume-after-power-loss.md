@@ -43,7 +43,7 @@ Resuming is only safe if work already done is not done again. GurtOS uses three 
 
 **Tool calls are keyed.** Every tool call carries a key that stays the same across a restart. If the log already has a result for that key, the broker returns it without running the tool. If the call was cut off before its result was logged, it runs again with the same key, and the tool passes that key to its API as an idempotency key. A payment API that saw the first attempt returns the same charge instead of making a second.
 
-Some apps add their own guard. The wallet writes a durable mark before it pays. If the box loses power in the middle of a payment, the resumed call refuses to pay again rather than guess, and you check the payment on the network's explorer.
+An app can add its own guard: write a durable mark before a step that cannot repeat, such as a payment. If the box loses power in the middle, the resumed call refuses to repeat it rather than guess.
 
 ## What the test suite checks
 
@@ -68,7 +68,7 @@ Everything the core needs to resume lives on the data partition: the log, worksp
 ## Limits
 
 - A task resumes, but the model call it was in the middle of does not. Droid redoes its current turn from the files and the session.
-- A tool call cut off mid-way runs again. That is safe only for tools that pass `ctx.key` to their API or keep their own durable mark, as the payment tools (`wallet.pay`, `shopper.buy`) do. A read-only tool, such as a price check, runs again, which is harmless.
+- A tool call cut off mid-way runs again. That is safe only for tools that pass `ctx.key` to their API or keep their own durable mark, as a payment tool must. A read-only tool, such as a price check, runs again, which is harmless.
 - A system that hangs without crashing does not restart by itself. A hardware watchdog would cover that, and is not set up.
 - Model cost for a turn cut off by the power cut may not be counted.
 

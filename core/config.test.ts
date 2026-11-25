@@ -77,7 +77,7 @@ test('folders: only a Personal box hands them out, only the owner\'s home or cho
 });
 
 test('setup: tasks a track starts at boot do not make a fresh install look already set up', () => {
-  const tracks = ['find', 'jira'];
+  const tracks = ['find', 'example'];
   const created = (source: string) => ({ type: 'task.created', spec: { source } });
   assert.equal(hadHumanUse([created('find')], tracks, 0), false, 'the photo index the find track starts at every boot');
   assert.equal(hadHumanUse([created('find'), created('schedule')], tracks, 0), false);

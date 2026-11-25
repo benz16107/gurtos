@@ -210,13 +210,13 @@ except Exception as e: print(e.code, json.loads(e.read())['error'])`;
   d.check(switches.filter((e) => e.who?.by === 'priya').length === 2 && switches.filter((e) => e.who?.by !== 'priya').length === 2, 'resumed: all three finish, and the log holds both pulls of the switch, by Priya');
 
   // ---------- shadow mode: a seat's decisions are suggestions a person decides, until the policy says it may go live ----------
-  // The clerk's real tool (credit-desk.collections_action) needs only a rules file in its workspace, so this stays offline.
+  // The example app's `example.record` tool declares `decides`, so it stands in for a clerk's real decision tool.
   const GO_LIVE = 'The Collections clerk goes live after 3 suggestions with 60% agreement.';
   const samShadow = await sam('PUT', '/api/business', { shadow: ['Collections clerk'] });
   ok(await priya('PUT', '/api/business', { policy: `${POLICY}\n${GO_LIVE}`, shadow: ['Collections clerk'] }), 'shadow on');
-  d.workspace('fogline-shadow', { 'rules.yaml': 'authority_limit: 10000\nrules:\n  - id: COL-1\n' });
+  d.workspace('fogline-shadow', {});
   const remind = (inv: string) =>
-    start(sam, 'Collections clerk', `Collections clerk: ${inv}`, `call credit-desk.collections_action {"subject":"${inv}","action":"friendly reminder","detail":"$1,200 is 12 days past due","rules":["COL-1"]}`, { workspace: 'fogline-shadow', tools: ['credit-desk.collections_action'] });
+    start(sam, 'Collections clerk', `Collections clerk: ${inv}`, `call example.record {"subject":"${inv}","action":"friendly reminder"}`, { workspace: 'fogline-shadow', tools: ['example.record'] });
   const sh = [await remind('INV-24110'), await remind('INV-24111'), await remind('INV-24112')];
   const sug = await d.waitFor('three shadow suggestions', async () => {
     const all = ok(await screen('GET', '/api/approvals?state=pending'), 'approvals') as Approval[];

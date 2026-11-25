@@ -5,9 +5,9 @@ approved what, what it cost, whether it was kept or undone, and the stretch of t
 to a customer or an auditor, and they check it in their own browser at [gurtos.com/verify](https://gurtos.com/verify/).
 Nothing is uploaded, and they do not have to trust the box, GurtOS or you.
 
-**It needs no account.** Two extras need one. Elastic (an Elastic Cloud Serverless project, see `tracks/elastic`) holds a
+**It needs no account.** Two extras need one. Elastic (an Elastic Cloud Serverless project) holds a
 copy of the log that the box cannot rewrite, and the receipt records whether the box's entries matched it. The daily
-fingerprint of the log on Solana devnet, written by the wallet app, lets the receipt prove the log was not rewritten
+fingerprint of the log on Solana devnet, written by a wallet app (none ships in this repo), lets the receipt prove the log was not rewritten
 afterward. Without them the receipt still proves the box signed it and that its entries are an unbroken stretch of the log.
 The app is off on a new box. Turn it on in the App Center.
 
@@ -37,7 +37,7 @@ record is the record.
 | Part | From |
 |---|---|
 | The signed receipt, the key, the chain of entry hashes, the QR code, the public check page | The OS (`tracks/receipts`, and the hash chain in `core/log.ts`) |
-| The add-only copy of every log entry. When the receipt is made, the box compares the task's entries with that copy and signs what it found (`anchors.elastic`). | Elastic (`tracks/elastic`, Serverless, a create-only key) |
+| The add-only copy of every log entry. When the receipt is made, the box compares the task's entries with that copy and signs what it found (`anchors.elastic`). | Elastic (Serverless, a create-only key) |
 | The daily fingerprint of the whole log, written as a memo on Solana devnet. The receipt carries the chain up to that fingerprint and the page looks the memo up on a public Solana node. | Solana, written by the wallet app (`tracks/wallet`, `audit.ts`) |
 | Who approved, from which phone, under which Business rule | The OS: Business approvals record the person and where the answer came from |
 

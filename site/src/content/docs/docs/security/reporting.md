@@ -69,7 +69,7 @@ Out of scope:
 The [threat model](/docs/security/threat-model/#what-gurtos-does-not-defend-against) and the [roadmap](/docs/project/roadmap/) list the limits we know about.
 The attack scoreboard, 41 attacks run against a real box on every merge with each one published as caught or not
 covered, is in
-[`tracks/armadin/SCOREBOARD.md`](https://github.com/benz16107/gurtos/blob/main/tracks/armadin/SCOREBOARD.md).
+[`tracks/attacks/SCOREBOARD.md`](https://github.com/benz16107/gurtos/blob/main/tracks/attacks/SCOREBOARD.md).
 
 ## Related
 

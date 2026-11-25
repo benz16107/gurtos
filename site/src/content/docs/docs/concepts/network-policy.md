@@ -60,7 +60,7 @@ Every refusal by the proxy is a `net.blocked` event in the action log, with the 
 { "seq": 217, "at": "2026-10-24T19:02:11.402Z", "type": "net.blocked", "task": "tk3m9qz1a2f", "host": "attacker.example:443", "prev": "fe601f0e…" }
 ```
 
-The portal shows these as red lines in the task's log, and counts them on the home screen. Optional apps that follow the log can act on them too: the Jira app comments on the task's issue, and the Elastic app makes them searchable. Each needs that service's account.
+The portal shows these as red lines in the task's log, and counts them on the home screen.
 
 A direct connection that goes around the proxy is rejected by the firewall, and the core logs it too. It reads the kernel log and writes a `net.blocked` event with the address and port, such as `203.0.113.7:443`, at most once every 5 seconds for the same task and address. DNS lookups a task makes itself are logged once per task, as `DNS lookups (port 53)`. If the machine has no readable kernel log, only the proxy's refusals are logged.
 
@@ -76,7 +76,7 @@ A Droid task talks to its model service: Factory, or Anthropic's `api.anthropic.
 
 A tool runs in the core, not in the task, so the task's `hosts` do not apply to it. A tool declares the hosts it talks to in its own `hosts` field, for documentation and the portal. This is the point of a tool: the task can use a paid API through the tool without being able to reach that API, or anywhere else, itself.
 
-Some tools apply the task's hosts on purpose. The optional wallet app's `wallet.pay`, which pays on a test network, only pays URLs in the task's `hosts` and refuses redirects, so a task cannot point it at the box's own API.
+A tool that makes its own requests should apply the task's hosts on purpose: only URLs in the task's `hosts`, and no redirects, so a task cannot point it at the box's own API.
 
 ## If the firewall cannot load
 

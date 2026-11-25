@@ -47,15 +47,13 @@ task's autonomy level. Deny it and the task fails with "the owner turned down th
 
 ## A team of custom droids
 
-`droids/` holds four Factory custom droids. The worker copies every app's `droids/*.md` into the task user's
+`droids/` holds two Factory custom droids. The worker copies every app's `droids/*.md` into the task user's
 `~/.factory/droids/`, so Droid can hand work to them.
 
 | Droid | Tools | Limits |
 |---|---|---|
 | `coder` | Read, Grep, Glob, LS, Edit, Create, ApplyPatch, Execute | No box tools and no spending |
 | `reviewer` | Read-only | Cannot edit, run commands, spend or ask |
-| `credit-analyst` | Read, Grep, Glob, LS, and the task's box tools | Cannot change a case file; big decisions go to `box_ask` |
-| `shopper` | Read, LS, and the task's box tools | Pays only through the broker, inside the task's budget |
 
 Tasks from this app tell Droid to have the coder make the change and then give the reviewer the diff. The reviewer
 answers `VERDICT: APPROVE` or `VERDICT: CHANGES`, and the verdict is in the log and on the task's card.

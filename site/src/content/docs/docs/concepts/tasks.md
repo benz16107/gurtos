@@ -20,7 +20,7 @@ You start a task with a spec. Every field except the title and the prompt has a 
 | `budgetCents` | Spending above this, in US cents, pauses the task for an OK | The Settings default (below), $1 on a new box |
 | `model` | The Claude model for a `droid` task: `haiku`, `sonnet`, `opus` or a full model id that starts with `claude-` | `BOX_MODEL` if set, else `sonnet` (`claude-sonnet-5-5`) |
 | `droid` | `{plan, autonomy}` for a `droid` task. `plan: true` makes Droid write a plan and wait for the owner's OK. `autonomy` is `low`, `medium` or `high`. `low` gets no hosts and a budget of 0, and `medium` caps the budget at $1. | High autonomy, no plan |
-| `source` | Who started it, such as `api`, `schedule` or `jira:BOX-12`. A request from a paired phone is always `phone:<device name>`. | `api` |
+| `source` | Who started it, such as `api`, `schedule` or `github:owner/repo#7`. A request from a paired phone is always `phone:<device name>`. | `api` |
 
 The defaults are deliberate. A task with no `tools` and no `hosts` can read and change its own copy of the files and nothing else. Every extra power is something you list. A budget matters once the task has a paid tool.
 

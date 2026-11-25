@@ -13,7 +13,7 @@ The machine-readable lists are the SBOMs attached to each release, one for the s
 
 ## GurtOS's own code
 
-Apache-2.0: `core/`, `tracks/`, `portal/`, `personal/`, `image/`, `native/`, `relay/`, `site/`, `showcase/`,
+Apache-2.0: `core/`, `tracks/`, `portal/`, `personal/`, `image/`, `native/`, `relay/`, `site/`,
 `release/` and the scripts. The root `package.json` and every workspace package say so.
 
 ## Flagged: read these
@@ -39,7 +39,7 @@ Apache-2.0: `core/`, `tracks/`, `portal/`, `personal/`, `image/`, `native/`, `re
 |---|---|---|
 | Server x86_64 | 444 | 560 npm packages (the box's code and its dependencies), about 200 Go modules inside four programs (Caddy 149, frpc 41, the TypeScript native compiler 10 and `age` 4), SpacetimeDB, Node.js, 4 Python packages |
 | Server arm64 | 437 | the same, with 203 Go modules |
-| Personal x86_64 | 1,263 | the same, plus Go modules in two more system programs (`ipp-usb`, `libsysmetrics`) and 42 Python packages (Ubuntu's own Python libraries for the desktop, and the requirements of the `fetch` app) |
+| Personal x86_64 | 1,263 | the same, plus Go modules in two more system programs (`ipp-usb`, `libsysmetrics`) and 42 Python packages (Ubuntu's own Python libraries for the desktop) |
 | Personal arm64 | 1,253 | the same, with 207 Go modules |
 
 Ubuntu packages by declared licence, Server x86_64 (444 packages; Personal is similar, with more of the same):
@@ -51,13 +51,12 @@ above.
 
 ## npm packages shipped on the box
 
-`npm ci --omit=dev` (what `core/install.sh` runs on every box and in every image) installs 327 packages on x86_64
-or arm64, because the apps in `tracks/` are npm workspaces and their packages come too: MIT 288, Apache-2.0 18,
-ISC 10, BSD-3-Clause 6, BSD-2-Clause 2, 0BSD 2 and Unlicense 1. The Moss packages are dev dependencies and are not
-among them. None is copyleft. Most of the Apache-2.0 packages belong to the test-money
-apps (the x402, Solana and Sign-In with Ethereum libraries); the others are the Droid SDK, the OpenTelemetry API,
-`axios-retry`, `reflect-metadata` and TypeScript. TypeScript ships its own `NOTICE.txt`, which stays in its folder
-on the box.
+`npm ci --omit=dev` (what `core/install.sh` runs on every box and in every image) installs 110 packages on x86_64
+or arm64, counted from `package-lock.json` on 2026-11-24 after the Cal Hacks sponsor apps left `main`: MIT 95, ISC 10,
+BSD-3-Clause 2, Apache-2.0 2 and BSD-2-Clause 1. The Moss packages are dev dependencies and are not among them. None is
+copyleft. The two Apache-2.0 packages are the Droid SDK and the OpenTelemetry API. TypeScript ships its own
+`NOTICE.txt`, which stays in its folder on the box. The sponsor apps' packages (Coinbase, Solana, x402 and others) are
+in the git tag `calhacks-2026`.
 
 The licence of each package is the `license` field in `package-lock.json`, checked against the package's own
 `package.json` and licence file where they differ.

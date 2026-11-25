@@ -6,8 +6,8 @@
 #   ./demo --here                  this machine. Only on a test VM: it needs root.
 #   ./demo --live-droid            also run the real Droid steps. They spend Factory credit, so they are OFF by default
 #                                  (same as DEMO_LIVE=droid). The run prints Factory's 5-hour and weekly use first.
-#   DEMO_LIVE=apify,visa ./demo    also make these tracks' paid or slow live calls (off by default)
-#   DEMO_ONLY=apify ./demo         only that track's step, for a developer's loop (the merge gate runs everything)
+#   DEMO_LIVE=find,droid ./demo    also make these tracks' paid or slow live calls (off by default)
+#   DEMO_ONLY=find ./demo          only that track's step, for a developer's loop (the merge gate runs everything)
 #   BOX_REVIEW=off ./demo          switch the second look at risky agent steps off (the anthropic track compares)
 set -euo pipefail
 cd "$(dirname "$0")"

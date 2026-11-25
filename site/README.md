@@ -14,9 +14,9 @@ npm run check     # after a build: every internal link resolves, and nothing pri
   OpenGraph image. The OpenAPI spec and the screenshots hold the name as literal text.
 - The HTTP API pages are generated from `openapi/box-api.yaml`.
 - Screenshots in `src/assets/screens/` are the running portal (`portal/screenshots/`) on a test box with scripted
-  tasks, the GurtOS Personal desktop (`personal/screenshots/`), and two `design-*` frames from `docs/figma/os-v2/` (Shopper and the wallet, labelled as designs).
+  tasks, the GurtOS Personal desktop (`personal/screenshots/`),.
   Check every new one for machine names, addresses and personal names before adding it.
-- Theme: `src/styles/theme.css`, from the design tokens in `docs/figma.md`. Diagrams are SVG in
+- Theme: `src/styles/theme.css`, from the design tokens in `docs/figma/tokens/`. Diagrams are SVG in
   `src/assets/diagrams/` and take their colours from the theme.
 
 ## Deploy

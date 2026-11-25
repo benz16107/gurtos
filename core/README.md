@@ -125,7 +125,7 @@ Settings, Accounts & Keys.", "This computer's disk is full. Free some space, the
 ("GurtOS could not set this task up (mount failed)..."), and the whole message goes to the journal.
 
 **Notes have text.** A `note` the core writes carries `text`, a sentence for Activity and Audit ("Setup: network
-step done", "Key saved: ANTHROPIC_API_KEY", "App turned on: Mana"). Show `text` when it is there.
+step done", "Key saved: ANTHROPIC_API_KEY", "App turned on: Find"). Show `text` when it is there.
 
 **Names and defaults.** The computer's name is the one given in setup's `name` step (`boxName`, up to 40
 characters), else `BOX_NAME`, else its id. A new box asks before any single spend over $5
@@ -214,10 +214,10 @@ it; don't keep a second copy of the state in a track, or two apps (and two scree
   budget or the owner's threshold. The core's `askFor` makes the approval, one per action (a retry reuses it),
   with `question`, `costCents`, `payee` and `purpose` (a tool fills the last two with `approval(input)`).
 - Every answer goes through one function, `answer(id, approved, by)`: the API, the SpacetimeDB `answer` reducer
-  (vouched connections only), a phone, a Jira or JSM button, ASI:One, a passkey. A track answers with
+  (vouched connections only), a phone, an app's panel or button, a chat, a passkey. A track answers with
   `box.answer(...)`. `by` names the device or person, never what a caller typed.
 - **Extend it, don't fork it.** Business adds who may answer and who was asked (`route`, checked before
-  `answer`). Push notifies on `approval.asked`. A passkey (Shopper) verifies, writes a `note`, then calls
+  `answer`). Push notifies on `approval.asked`. A passkey app verifies, writes a `note`, then calls
   `box.answer`. A tool that must not run without a stronger approval checks that itself before paying (for
   example, a passkey note in the log for this approval). No track keeps its own pending or approved state.
 
@@ -231,16 +231,16 @@ it; don't keep a second copy of the state in a track, or two apps (and two scree
   "upto") is checked and approved on its cap but may report `spentCents` (0 to the cap) in its output; the box
   counts that.
 - **Money only moves inside a tool** that the task calls through the broker, never from a route or a log reader.
-  That is what makes the budget, the approval and the log cover every payment (wallet, x402, Stripe, Visa).
+  That is what makes the budget, the approval and the log cover every payment (wallet, x402, card).
 - New spending rules (a per-merchant cap, a mandate, a daily limit) belong in this check in the core
   (`runTool`, next to the threshold), as Settings, so every paying app obeys them. Ask the core thread.
 
-**Guest requests** (a stranger asks the box for something: a Mana page, an ASI:One chat). One path, shared by
+**Guest requests** (a stranger asks the box for something: a public page, a chat). One path, shared by
 every front door: the request becomes a task that first waits for the owner's OK (an approval, as above), runs
 with no owner files and only the network and tools it was given, a small budget, and is undone if nobody answers.
 The limits (kinds allowed, per-guest and overall rate, how many may wait) are kept in one place, so two front
-doors can't double them. Until it moves into the core, Mana's `tracks/mana` route is that path, and other front
-doors (Fetch) call it rather than keep their own.
+doors can't double them. Until it moves into the core, no app in this repository implements it, and an app that
+adds a front door should call one shared route rather than keep its own.
 
 **Pausing.** Settings `paused` is the only pause: no task starts, running ones hold before their next step, tool
 call or question. Personal's switch and Business's kill switch both set it (Business may also freeze task units
@@ -318,7 +318,7 @@ Make `tracks/<name>/track.ts` and default-export a `Track` with any of these slo
 | `secrets` | Vault keys this track's routes and triggers may read with `box.secret(name)`. Tools and jobs declare their own. |
 | `optionalSecrets` | Keys among the app's declared secrets it can run without (it falls back to test mode). The App Center marks them `optional: true`, and setup asks only for the others. |
 | `x-box-caller` | Not a slot: a header on the Request every route gets, set by the box (a copy the caller sends is replaced): `screen` (the box's own screen), `owner` (a phone paired as the owner), `device:<id>` (another paired phone), `service` (a helper on the box) or `none` (an open route reached through a proxy with no token). On a Business box, `x-box-person` carries the calling person's id (absent otherwise); the `box` the route gets already acts as that person. |
-| `openRoutes` | Route keys (like `'GET /status'`) that need no paired-phone token, even for a request that arrives through a public proxy. For a route that is public on purpose, or checks its own secret (the Jira panel's routes). Every other route needs a phone. An open route must return nothing private unless its own check passes. |
+| `openRoutes` | Route keys (like `'GET /status'`) that need no paired-phone token, even for a request that arrives through a public proxy. For a route that is public on purpose, or checks its own secret. Every other route needs a phone. An open route must return nothing private unless its own check passes. |
 | `ownOrigin` | Route keys whose HTML page is served with the box's own origin instead of the sandbox (*An app's window*): only for a page that cannot work without one, such as a passkey ceremony. It runs with the box's origin, so review it like core code. The window token and every other rule still apply. |
 
 Rules:
@@ -342,7 +342,7 @@ import { schedule, webhook, onFileChange } from '../../core/triggers.ts';
 
 triggers: [
   schedule({ name: 'nightly', dailyAt: '02:00', task: () => ({ title: 'Nightly report', prompt: '...' }) }),
-  webhook({ name: 'jira', task: (payload) => ({ title: payload.issue, prompt: `Fix ${payload.issue}` }) }),
+  webhook({ name: 'issue', task: (payload) => ({ title: payload.issue, prompt: `Fix ${payload.issue}` }) }),
   onFileChange({ name: 'inbox', dir: '/var/lib/box/inbox/mytrack', task: (file) => ({ title: file, prompt: `Process ${file}` }) }),
 ]
 ```
@@ -464,7 +464,7 @@ the page's own `fetch` calls, and `/kit/gurtos.js` carries it on links, forms an
 browser makes by itself (a `<script type="module" src>`, an `<img>`) carries no header: add `location.search` to its
 address, as `tracks/spacetime/app/index.html` does. A page that cannot work without a real origin (a passkey
 ceremony) is listed in the track's `ownOrigin` and served without the sandbox, with the box's own origin: only
-Shopper's Face ID page (`GET /approve`), which the phone opens top level. Such a page is reviewed like core code: it
+the example app's `GET /approve` page does. Such a page is reviewed like core code: it
 shows an agent's text only escaped and loads nothing from another site. An app answers only the requests of tasks
 its own box made (`task.app`, whatever `source` it gave), and its box may not undo a task whose changes the owner
 kept in their folder (403); the owner undoes that. Window tokens live in memory: after a restart, an old one gets a
@@ -567,7 +567,7 @@ contains (`Fraud referrals`), `Requests from the credit desk` (the app), or word
 $500`). Who: a name people approve for (`the Controller`, `IT`), or a role (`any approver`, `an admin`, `the owner`).
 A request matching no rule goes to the owner. `PUT /api/business {policy}` refuses a line it can't read and names it.
 
-**Rules from outside** (Mana drafts them in a chat). A track reads the rules with `box.policy()` and proposes new text
+**Rules from outside** (an app drafts them in a chat). A track reads the rules with `box.policy()` and proposes new text
 by starting a task that asks for an OK whose question carries `[policy <hash>]` (the first 12 hex characters of the
 text's SHA-256). Once that request is approved, `box.setPolicy(text, approvalId)` applies the text, but only if the
 request came from one of the track's own tasks and was approved by an owner or an admin, never by an approver, an agent
@@ -599,8 +599,8 @@ only the requests routed to them (the `my_requests` view over the private `reque
 public `approval` table still holds every approval for the box's own screens. They answer with `answerRequest`; the first answer wins in the database, and the box then runs these same
 checks as that person (`answerAs`). If the checks refuse it, the request goes back to pending.
 
-**Outside panels on a Business box** (the Jira panel, JSM, ASI:One through Fetch) answer only as a person: the track
-verifies its own credential, maps it to a person (the Jira track keeps a Jira account id to person id list), and calls
+**Outside panels on a Business box** (an issue-tracker panel, a chat agent) answer only as a person: the track
+verifies its own credential, maps it to a person (the track keeps a list from its own account ids to person ids), and calls
 the API over the box's socket with `x-box-person`. Without a mapped person an outside panel can still read and Undo,
 but its Approve is refused, so turning Business on never lets an unknown outside account approve.
 
@@ -720,7 +720,7 @@ until it is removed, its person is removed, or a later sign-in is refused.
 **Why it is here: the path to production.** A company should not hand an agent its credit desk on day one. Shadow
 mode is how a seat earns it, and it is GurtOS Business's answer to the "path to production" criterion: a one-week
 pilot, a number that says whether the agent decides the way the company's people do, a bar written in the policy, and
-one setting to go live or go back. [docs/pilot.md](../docs/pilot.md) is the plan.
+one setting to go live or go back.
 
 - **The setting.** `PUT /api/business {shadow: ["Credit analyst"]}`, from an admin or the owner, puts seats in shadow;
   `{shadow: []}` takes them all live. Each change is a `business` note with the new list and who made it. Settings >
@@ -755,8 +755,7 @@ waits, a new task stays `queued`, and a reboot keeps it paused. Approvals can st
 task and starts the queued ones. Each pull is a `kill-switch` note with who pulled it and from which phone or screen.
 `GET /api/pause` (`{paused, by, at, via}`), `GET /api/system` (`paused`) and `GET /api/health` say whether it is on.
 Measured on a live run with 10 agents (3 Droid seats on Claude): stopped in 137 ms, every unit frozen in 271 ms, no
-agent event while paused, a bad batch undone in 48 ms. `docs/drill.md` has the drill and how to run it
-(`core/drill.ts`).
+agent event while paused, a bad batch undone in 48 ms. `core/drill.ts` is the drill; its header says how to run it.
 
 ## The API for the portal and the phone
 
@@ -783,10 +782,10 @@ answers without `/api`, which is what the demo and tracks use.
 | `GET /api/approvals?state=pending` | The inbox. Leave out `state` for all of them. |
 | `POST /api/approvals/<id> {approved: true or false, by: "portal", auth?}` | The approval. The first answer wins. `auth` is how a native app says it checked it was you (`face-id`, `touch-id`, `passcode`, `wrist`); the answer keeps it as reported, never as proof: "Ben's Watch (on the wrist, reported)", "Ben's iPhone (Face ID, reported)" (`by`, or `via` on Business). |
 | `GET /api/log?after=<seq>&task=<id>` | Log events, both filters optional (cursor polling) |
-| `GET /api/log/stream?after=<seq>&task=<id>` | The log as Server-Sent Events: replays from `after`, then streams new events live. For Elastic and Jira to follow without polling files. |
+| `GET /api/log/stream?after=<seq>&task=<id>` | The log as Server-Sent Events: replays from `after`, then streams new events live. For an outside reader to follow without polling files. |
 | `GET /api/apps` | Apps from tracks: `{name, title, href, track}`. Open `/t/<track><href>`. |
 | `GET /api/health` | `{ok, startedAt, resumed: [taskId...], tasks, tools, spacetime: {port, database}}`. `resumed` is the tasks boot restarted after a power cut, for the screen's session-restore banner. |
-| `GET /api/boxes` | This box and its peers (`BOX_PEERS`), so one portal lists and drives several boxes (the Vultr second box): `[{id, name, stdb, self}, ...]` |
+| `GET /api/boxes` | This box and its peers (`BOX_PEERS`), so one portal lists and drives several boxes (a second box): `[{id, name, stdb, self}, ...]` |
 | `POST /api/pair/start` | Owner. Mint a one-time pairing code for the box screen's QR: `{code, url, boxUrl?, expiresAt, box}`. `url` opens the GurtOS app (app.gurtos.com); `boxUrl` is the box's own pairing page, when `BOX_URL` or remote access gives it an address |
 | `POST /api/pair {code, name, kind?}` | A phone redeems the code for its own device token: `{token, box:{id,name}, device}`. One-time. `kind` is what the device says it is, `web` (default), `iphone` or `mac`; anything else is a 400. It is never used for a security decision. |
 | `POST /api/devices/self/watch {name}` | An `iphone` token only: a separate token for its Apple Watch, `{token, device}`, with the iPhone's Business person and nothing more: never `owner`, so Settings, keys, setup, apps and devices are refused. It can't vouch for a SpacetimeDB identity. A new one replaces the old; 3 an hour per iPhone. Revoking the iPhone, or removing its person, revokes it. |
@@ -803,7 +802,7 @@ What a screen needs, and where it comes from:
 - **Inbox:** the SpacetimeDB `approval` table where `state` is `pending`. Approve or Deny with the `answer`
   reducer, or `POST /api/approvals/<id>`.
 
-**Following the action log** (Elastic, Jira). An in-process track uses the `logReaders` slot: the core feeds
+**Following the action log** (an app that sends the log out). An in-process track uses the `logReaders` slot: the core feeds
 `read(event)` every event in order and saves a cursor, so it never polls files. An outside reader follows
 `GET /api/log/stream` (Server-Sent Events): each event is `id: <seq>` and `data: <json>`. On reconnect, pass
 `?after=<seq>` or the `Last-Event-ID` header and the box replays from there, then streams live. `GET /api/log?after=`
@@ -915,7 +914,7 @@ encrypts each one for the phone (RFC 8291), so the gateway forwards bytes it can
 | `POST /api/push/test` | Send this device a test push: `{sent: 1}`, or `409` when remote access or notifications are off |
 
 The decrypted push is JSON: `{v: 1, type: 'approval' or 'test', machine: <box id>, box: <box name>, url: <box https
-origin>, id, task, source, title, body, costCents, mac}` (`source` is the task's, like `shopper:...`). `mac` is base64url HMAC-SHA256 with the device's key for this box
+origin>, id, task, source, title, body, costCents, mac}` (`source` is the task's, like `factory:...`). `mac` is base64url HMAC-SHA256 with the device's key for this box
 over the JSON of every other field, keys sorted. The app checks it before it shows a push as this box's or acts on
 Approve or Deny.
 

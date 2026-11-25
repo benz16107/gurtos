@@ -4,7 +4,7 @@ Instructions for coding agents (and people) working in this repo. Contributor gu
 a GurtOS computer for someone through an agent, follow `AGENT-SETUP.md` instead.
 
 GurtOS is a set of operating systems built for AI agents, watched and controlled from a web
-portal and a phone. It started as a Cal Hacks 13.0 project. It is a preview: see `README.md`.
+portal and a phone. It started as a Cal Hacks 13.0 project, and the sponsor apps from that weekend live at the git tag `calhacks-2026`. It is a preview: see `README.md`.
 
 **Naming rule:** anything a person reads (the portal, the box screen, the docs, the README) says **GurtOS**,
 and the editions are **GurtOS Server**, **GurtOS Personal** and **GurtOS Business**. Internal names stay `box`:
@@ -65,12 +65,12 @@ and how its screen and controls are presented.
 - `portal/` the web app for the portal and the box's own screen.
 - `personal/` the GurtOS Personal desktop layer (notifications, top-bar indicator, Files action, Keep and Undo).
 - `image/` the bootable images and their installer, updates and rollback.
-- `site/` the public docs at gurtos.com. `showcase/` the Cal Hacks showcase at calhacks.gurtos.com.
+- `site/` the public docs at gurtos.com.
 - `native/` the GurtOS apps for iPhone, Apple Watch and Mac (one SwiftUI project, `native/apple`) and the Android APK
   (`native/android`). They use the box API like the portal; `native/demo.ts` checks their calls.
 - `release/` how releases are built, signed and published, the licence report, and the public-readiness audit.
 - `relay/` the relay for remote access and push, which runs on its own machine.
-- `docs/` design notes and the hackathon's records; `docs/README.md` says which are current.
+- `docs/` design notes; `docs/README.md` lists them.
 - `demo` the merge gate (below). `deploy` installs origin/main as the box service on a machine you name.
 
 On a box: `BOX_HOME=/var/lib/box` holds `log.jsonl`, `workspaces/`, `views/` and `tasks/<id>/`. The vault is

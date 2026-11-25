@@ -33,10 +33,10 @@ export default async function (d: DemoKit) {
   const jobTask = await d.api<Task>('GET', `/tasks/${job.id}`).then((r: any) => r.task);
   d.check(jobTask.user === `box-${job.id}` && jobTask.hosts.length === 0 && jobTask.source === 'droid-exec', 'the job ran as its own Linux user with no network');
 
-  // 2. The team: four custom droids, each with its own tools.
+  // 2. The team: two custom droids, each with its own tools.
   const droids = fs.readdirSync(path.join(here, 'droids')).map((f) => [f, fs.readFileSync(path.join(here, 'droids', f), 'utf8')] as const);
   const front = (s: string) => Object.fromEntries([...s.matchAll(/^(\w+): (.*)$/gm)].map((m) => [m[1], m[2]]));
-  d.check(droids.length === 4 && droids.every(([f, s]) => front(s).name === f.replace('.md', '')), 'the coder, reviewer, credit analyst and shopper droids are valid');
+  d.check(droids.length === 2 && droids.every(([f, s]) => front(s).name === f.replace('.md', '')), 'the coder and reviewer droids are valid');
   d.check(front(droids.find(([f]) => f === 'reviewer.md')![1]).tools === 'read-only', 'the reviewer can only read');
 
   // 7. Usage: percentages only, never the key.

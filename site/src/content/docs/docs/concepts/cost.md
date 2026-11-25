@@ -9,15 +9,11 @@ Every task in GurtOS has a running cost, `costCents`, in US cents. It is the sum
 
 A tool declares what each call costs with `cost(input)`, in cents. The broker counts it when the call succeeds. The amount goes on the same log line as the result, a `tool.result` event with `cents`, so it is counted exactly once, even if the log is replayed after a power cut.
 
-Some examples from the apps that ship with GurtOS. Apify, the wallet and the shopping agent are optional and need that service's account.
+An example from the apps that ship with GurtOS.
 
 | Tool | Cost it declares |
 |---|---|
 | `example.spend` | Whatever the input says (test money) |
-| `apify.run` | The spending cap the call sets with `maxUsd`, $0.10 by default |
-| `apify.checkPrice` | 1 cent |
-| `wallet.pay` | The `cents` in the input, or the price of the last quote for that URL (test money on Solana devnet) |
-| `shopper.buy` | The order total (Stripe test mode) |
 
 A tool that can cost a variable amount declares its maximum, so the budget check is on the worst case. A metered tool can report `spentCents` in its output, from 0 up to that maximum, and the box counts that instead. Paid tool calls are also what [budget approvals](/docs/concepts/approvals-and-budgets/) are about: a call that would take the task over its budget asks first.
 
@@ -52,11 +48,9 @@ Model cost never pauses a task by itself: the budget check runs only before a pa
 - Each task: `costCents` and `budgetCents` in `GET /api/tasks`, and every cost event in `GET /api/tasks/<id>`.
 - Live: the SpacetimeDB `task` table has `costCents`, rounded to whole cents.
 - The portal's home screen shows money spent today across all tasks, and Activity lists each cost and each paid tool call as it happens.
-- The Elastic app answers "what did it cost this week, by task and by app?" from the log. See [send the log to Elastic](/docs/guides/send-the-log-to-elastic/).
 
 ## Test money
 
-Two optional apps move money, and both use test money only. The wallet pays for APIs with USDC on Solana devnet, and the shopping agent pays a test store through Stripe test mode. Each refuses live money in code. Their spending counts toward a task's cost like any other, and the portal, the log and the approval say TEST in words. See [let agents pay for APIs](/docs/guides/agent-payments/) and [set up the shopping agent](/docs/guides/shopping-agent/).
 
 ## Limits
 

@@ -114,7 +114,7 @@ keys with the write-only `PUT /api/vault/<NAME>`, apps with `/api/apps/<id>/enab
 | AI models | One model key, write-only: `ANTHROPIC_API_KEY` (your own Anthropic key is enough) or `FACTORY_API_KEY`. A saved key shows as saved, never its value |
 | Folders | The owner's usual folders, each May change or Not allowed (`agentFolders`), plus Add a folder |
 | Permissions | Internet for new tasks, the spend that always asks, the default budget, quiet hours |
-| Apps | Not offered in Setup. The list is GurtOS Settings, Apps: every app with its icon, the sites it reaches and its keys, "Test money only" on Shopper, Agent wallet and ASI:One. Setup only turns Find on the first time |
+| Apps | Not offered in Setup. The list is GurtOS Settings, Apps: every app with its icon, the sites it reaches and its keys, with "Test money only" on any app that moves test money. Setup only turns Find on the first time |
 | Pair a phone | QR and code when the box has an address a phone can reach; otherwise it says so and offers Skip |
 | Done | Four cards: Ask an Agent, the top bar, Keep or Undo, History. Start using GurtOS finishes and opens the app |
 
@@ -292,7 +292,7 @@ screens (people, rules, routed approvals, the audit trail) in the browser for no
 - Banners: none replayed at login, and tasks that finish within 3 seconds of each other share one.
 - Personal's spending defaults: ask over $5.00, budget $1.00, set by Setup the first time and used by New task.
 - Setup offers no apps. The first time, it turns Find on and every other app off. Settings' Apps page lists apps for
-  one person (Find, Shopper, Wallet, Factory, ASI:One, Mana, Apify) with "Needs a key", "Uses the internet" and "Test
+  one person (Find and Factory) with "Needs a key", "Uses the internet" and "Test
   money only" chips, and the app's sidebar adds "(test)" to the test-money ones. Settings' Keys page groups keys by app.
 - Times follow GNOME's clock setting (24-hour or AM/PM) in the app, Settings, Setup and the top bar. Text sizes are in
   pt, so GNOME's Large Text makes GurtOS's windows larger too.

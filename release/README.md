@@ -94,7 +94,7 @@ release. Each build machine is a fresh Ubuntu 24.04 VM of the right architecture
    Each `gurtos-<edition>-<arch>.sqfs` sits beside its `.sha256` and `.sig`, so `box-update apply <url>` finds them.
 7. **Verify as a stranger** on a clean VM as a new user: download everything from GitHub and run the two commands
    below.
-8. **Update the download pages** (gurtos.com/download in `site/`, and the showcase) with the new checksums. Then
+8. **Update the download pages** (gurtos.com/download in `site/`) with the new checksums. Then
    delete the build VM, the test VMs and their custom ISOs, and the staging files.
 
 Limits met on the way: some cloud providers allow only two custom ISOs per account, and a monthly spending limit can

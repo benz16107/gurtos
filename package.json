@@ -23,7 +23,7 @@
   "scripts": {
     "box": "node --experimental-strip-types --disable-warning=ExperimentalWarning core/box.ts",
     "check": "tsc -p .",
-    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test --test-force-exit 'core/*.test.ts' 'relay/*.test.ts' 'tracks/*/*.test.ts' 'portal/*.test.ts'"
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test --test-force-exit --test-timeout=60000 'core/*.test.ts' 'core/workers/*.test.ts' 'relay/*.test.ts' 'tracks/*/*.test.ts' 'portal/*.test.ts'"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

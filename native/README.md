@@ -76,8 +76,7 @@ waits on a spinner for a relay that is down.
   Business, an admin's.
 - **Approve and Deny** sit right in each row. Anything that spends money asks for Face ID first (the device passcode if
   Face ID is off or locked out), and the answer tells the computer how it was checked, which it keeps as reported by
-  the device ("<phone> (Face ID, reported)"). A purchase made through the optional Shopper app needs a passkey on the
-  computer's own approval page, which the iPhone opens in an in-app browser.
+  the device ("<phone> (Face ID, reported)").
 - **Tasks** show their steps live (the computer's log stream), what was blocked, Undo with its confirmation, and Keep.
 - **Activity** is the action log in plain words. **Settings** has the computer, its notifications status, the list of
   computers and Forget.
@@ -111,7 +110,7 @@ needs push-to-update through the relay. The widget and the notification cover th
 - **The safety rule is the computer's.** The iPhone asks each computer for a separate Watch token
   (`POST /api/devices/self/watch`). With that token the computer approves only when the Watch says it is on the wrist
   and unlocked (watchOS's wrist-detection check), up to Settings `watchLimitCents` ($25 by default), and never for a
-  Business request or a Shopper purchase. So a Watch can approve any small request outside those two. Anything else
+  Business request. So a Watch can approve any small request outside that. Anything else
   returns a 403 with `needs: "iphone"`, and the request keeps waiting for Face ID on the phone. Deny always works.
   Revoking the iPhone, or removing its person on Business, revokes its Watch. The wrist check is what the Watch
   reports, not proof: the computer records it as "Demo Watch (on the wrist, reported)". The Watch app itself also
@@ -137,8 +136,6 @@ needs push-to-update through the relay. The widget and the notification cover th
 - **Send to GurtOS** in the Share menu sends the chosen files (up to 8, 5 MB in all), text or link to a new task.
   The computer puts files in a new workspace of their own that it names (`POST /api/tasks {files}`), never an owner's
   folder or an existing workspace, so the task's copy holds only them; the log keeps names and sizes.
-- A passkey purchase from the optional Shopper app is approved on the iPhone. The Mac does not open that page, because
-  its address carries this Mac's token and would stay in the browser's history.
 - The menu picture is drawn by the app's `--render-shots` mode from the same model: macOS blocks screen capture
   over ssh. The Ask and Pair pictures are the real views.
 - There is no auto-update. Download a new DMG for a new version.

@@ -163,11 +163,11 @@ export function fieldsOf(e: LogEvent): { main: [string, string][]; raw: [string,
   return { main, raw };
 }
 
-/** What an Undo confirm says. A track can say what else undo does with `undo` in a step's data (Shopper: "Undo
- * refunds this $13.00 test payment."); the newest one wins. */
+/** What an Undo confirm says. A track can say what else undo does with `undo` in a step's data
+ * ("Undo refunds this $13.00 test payment."); the newest one wins. */
 export function undoCopy(t: Pick<Task, 'id' | 'source'>, files?: number) {
   const step = box.events.findLast((e) => e.task === t.id && e.type === 'task.step' && typeof (e.data as { undo?: unknown })?.undo === 'string');
-  const extra = step?.type === 'task.step' ? (step.data as { undo: string }).undo : t.source.startsWith('shopper') ? 'Its test payment is refunded.' : '';
+  const extra = step?.type === 'task.step' ? (step.data as { undo: string }).undo : '';
   const refund = /refund/i.test(extra);
   const leave = files === 1 ? 'Its 1 file leaves' : files ? `Its ${files} files leave` : 'Its changes leave';
   return {

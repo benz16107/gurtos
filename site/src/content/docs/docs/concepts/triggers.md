@@ -13,7 +13,7 @@ A trigger is an object in an app's `triggers` slot with a `name` and a `start(bo
 
 Because `start` runs at every boot, a trigger re-arms itself after a restart. A schedule keeps its timing, a webhook is served again, and a file watcher watches again.
 
-Every task a trigger starts records where it came from in `source`, so the portal and the log show "schedule", "webhook", "jira:BOX-12" or "asi1" next to it. If the trigger does not set `source`, the core uses the app's name.
+Every task a trigger starts records where it came from in `source`, so the portal and the log show "schedule", "webhook", or "github:owner/repo#7" next to it. If the trigger does not set `source`, the core uses the app's name.
 
 ## The three generic triggers
 
@@ -54,8 +54,6 @@ The folder is created if it does not exist. Files in it are not part of any work
 Anything that can call `box.createTask` from the core can start tasks. The included apps have their own triggers. The last two are optional apps that need that service's account:
 
 - /find rescans its workspaces at boot, after every task and every minute. It starts a Claude description task only when you press **Describe with Claude** on the Find page.
-- The shopping agent runs a check every 20 seconds and starts a purchase task when a watched price drops. It buys from a test store only.
-- The ASI:One app runs a chat agent that starts a task when a paired owner asks for work.
 
 A trigger runs inside the core, so it may read the vault keys its app lists in `secrets` with `box.secret(name)`. It must never put a secret in a task's prompt.
 
@@ -68,4 +66,3 @@ A trigger could call an API directly. GurtOS has it start a task instead, so the
 - [Schedule a routine](/docs/guides/schedule-a-routine/)
 - [Apps and slots](/docs/concepts/apps-and-slots/)
 - [App SDK](/docs/reference/app-sdk/)
-- [Reach GurtOS from ASI:One](/docs/guides/asi-one/)

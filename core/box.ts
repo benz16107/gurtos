@@ -271,7 +271,7 @@ class Core {
   /**
    * The disk cap: every two seconds, each running task's disk is measured (its layer, home and /tmp), and a task past its cap (5 GB, or its
    * app's permission, or BOX_TASK_DISK_CAP) is stopped and undone, logged and told to the owner's phone. Not a hard quota:
-   * a writer can pass the cap until the next check. Armadin measured 0 to 3.1 s from the write to the stop (six runs).
+   * a writer can pass the cap until the next check. The attack tests measured 0 to 3.1 s from the write to the stop (six runs).
    * A task that ends between two checks is measured once more as it ends (the worker's exit, in start).
    */
   watchDisk() {
@@ -641,7 +641,7 @@ class Core {
     if (s.worker === 'droid' && process.env.BOX_NO_DROID) throw new Error('real Droid is off in this demo run (it spends Factory credit); DEMO_LIVE=droid ./demo, or ./demo --live-droid, turns it on');
     for (const name of s.tools) if (!this.tools.has(name)) throw new Error(`no tool ${name}`);
     // Apps may hand the agent what they remember. A Droid task gets it after its prompt; any task logs what it was handed.
-    // Never for a guest's task (a stranger through the public Mana app or ASI:One): its result goes back to the stranger.
+    // Never for a guest's task (a stranger through a public app or chat): its result goes back to the stranger.
     // Each app gets 2 s, and all of them together may add 8,000 characters, so a slow app or a long memory cannot hold up or swamp a task.
     const handed: string[] = [];
     const guest = /^guest(-run)?:/.test(s.source) || s.workspace === 'guest';
@@ -1107,7 +1107,7 @@ class Core {
       const owners = (s?: Sso) => Object.values(s?.groups ?? {}).some((g) => g.role === 'owner');
       if ((owners(b.sso as Sso | undefined) || owners(this.business.sso)) && !this.isOwner(req)) forbid('only the owner can map a group to the owner role');
     }
-    // A seat counts once it is declared, or once a task on this box has worked in it (the credit desk's seats).
+    // A seat counts once it is declared, or once a task on this box has worked in it (Business seats).
     const worked = [...this.state.tasks.values()].flatMap((t) => (t.seat ? [{ name: t.seat }] : []));
     if ('shadow' in b) b.shadow = checkShadow(b.shadow, [...((b.seats as Business['seats']) ?? this.business.seats), ...worked]);
     const { name, who } = this.actor(req);
@@ -1145,7 +1145,7 @@ class Core {
   }
 
   /**
-   * Rules from outside (Mana drafts them in a chat): applied only when a track's own request for exactly this text was
+   * Rules from outside (an app drafts them in a chat): applied only when a track's own request for exactly this text was
    * approved by an owner or an admin, so no rule can let an approver, an agent or the app itself change the rules.
    */
   policyFrom(track: string, text: unknown, approvalId: string) {
@@ -1925,7 +1925,7 @@ class Core {
 
   // ---------- pairing a phone, and listing every box ----------
 
-  /** This box plus the peer boxes in BOX_PEERS, so one portal lists and drives several (the Vultr second box). */
+  /** This box plus the peer boxes in BOX_PEERS, so one portal lists and drives several (a second box). */
   boxes() {
     let peers: unknown[] = [];
     try {
@@ -2668,7 +2668,7 @@ class Core {
     return true;
   }
 
-  /** Follow the action log live over Server-Sent Events, so a reader (Elastic, Jira) need not poll files.
+  /** Follow the action log live over Server-Sent Events, so a reader need not poll files.
    *  GET /api/log/stream?after=<seq>&task=<id>. Each event is `id: <seq>` + `data: <json>`. Resume with
    *  ?after=<seq> or the Last-Event-ID header; replays from there, then streams new events. */
   logStream(req: http.IncomingMessage, res: http.ServerResponse) {

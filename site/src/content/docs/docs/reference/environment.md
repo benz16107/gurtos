@@ -25,7 +25,6 @@ Then run `systemctl daemon-reload && systemctl restart box.service`. On a GurtOS
 | `BOX_PORTAL` | `portal/dist` in the source tree | The folder of the built portal the box serves |
 | `BOX_ID` | the machine's hostname | This box's id, in `GET /api/boxes`, `GET /api/system` and pairing. On the OS image the hostname is `gurt-<id>`, where `<id>` is the first 6 hex digits of the SHA-256 of the box's public key, such as `gurt-bf07fe`. |
 | `BOX_NAME` | the value of `BOX_ID` | This box's name for people. The name chosen in setup wins over it. |
-| `BOX_URL` | none | This box's own address for other devices, such as `http://box.local:7700`. Both editions from the ISO set it to `http://<its address>:7700` at each start. Shown in `GET /api/boxes`. With it set, `POST /api/pair/start` returns an absolute `url`, so the QR code on the box's own screen opens on a phone. The address of remote access, while it is on, takes its place. |
 | `BOX_PEERS` | `[]` | Other boxes one portal can list, as a JSON array of `{"id", "name", "url", "stdb"}`. See [Add a second box](/docs/guides/add-a-second-box/). |
 | `BOX_OWNER` | none | Personal (preview): the owner's Linux user. An owner set at runtime with `PUT /api/owner` (saved in `BOX_HOME/owner.json`) wins over it. On the GurtOS Personal image, `box-owner.service` runs `personal/install.sh`, which writes it to `box.service.d/personal.conf` for the first person in the `sudo` group once the desktop's own setup has made that account. Leave it unset on a Server box. |
 | `BOX_EDITION` | `personal` with an owner, else `server` | The edition `GET /api/system` reports: `server`, `personal` or `business`. `business` also turns the Business edition on the first time the box starts, until its saved setting says otherwise. |
@@ -112,7 +111,6 @@ These are read by programs that talk to a box, not by the box.
 
 | Variable | Read by | Default | Does |
 |---|---|---|---|
-| `BOX_URL` | `core/claude-mcp.ts` (Claude on your own computer), the GurtOS Personal desktop layer | `http://127.0.0.1:7700` | The box to talk to |
 | `BOX_TOKEN` | `core/claude-mcp.ts` | none | A paired device's token. Not needed on the box itself. |
 | `BOX_MCP_ANSWER` | `core/claude-mcp.ts` | off | `on` adds the `box_answer_approval` tool, so Claude can approve or deny a waiting request. Without it Claude can read requests but a person answers them. The answer is logged under the paired device's name. |
 | `BOX_SETUP_CODE`, `BOX_SETUP_NAME` | `core/claude-mcp.ts` | none, `Claude (setup)` | Instead of a token, the code on a new computer's screen, and the device name it gets |
@@ -137,19 +135,10 @@ A relay you run reads these. See [Self-host](/docs/guides/self-host/).
 | `BOX_STDB_WAIT_MS` | The Spacetime app | `10000` | How long it waits for SpacetimeDB to answer before it reports the live state as unreachable |
 | `BOX_FLEET_URL` | The Spacetime app's fleet view | `https://maincloud.spacetimedb.com` | The SpacetimeDB host that receives fleet counts. The fleet view is off by default. When the owner turns it on, the box reports its id, name, edition, version and task counts, never a prompt, file or key. |
 | `BOX_FLEET_DB` | The Spacetime app's fleet view | `gurtos-fleet` | The database on that host. Point both variables at your own SpacetimeDB to keep the counts to yourself. |
-| `PORT` | `tracks/wallet/seller.ts` | `4021` | The port of the wallet's x402 test API |
-| `BOX_PUBLIC_URL` | The Wallet app | the request's own host | The public address the wallet's sell routes put in a payment request |
 | `FIND_CLOUD_SYNC` | The Find app | off | `1` pushes the search index to the Moss cloud copy, at most every 10 minutes and only when it changed |
-| `ELASTIC_VERIFY_MS` | The Elastic app | `600000` | How often it checks the log against Elastic's copy |
-| `ELASTIC_REQUESTS_MS` | The Elastic app | `5000` | How often it reads requests left in Elastic |
 | `FACTORY_GITHUB_EVERY_MS` | The Factory app | `120000` | How often it looks for GitHub issues labelled `droid` |
 | `FACTORY_GITHUB_API` | The Factory app | `https://api.github.com` | The GitHub API address, for GitHub Enterprise or a test |
-| `VULTR_BACKUP_EVERY_MS` | The Vultr app | `86400000` | How often it backs up to Vultr Object Storage |
-| `BOX_URL` | The Jira app's Forge app, `tracks/jira/forge` | none, set it | A Forge variable, not a box setting: the public address the Jira panel calls, ending in `/t/jira`. Set with `forge variables set`. |
-| `BOX_SECRET` | The Jira app's Forge app | none | An encrypted Forge variable: the same shared secret as `JIRA_BOX_SECRET` in the box's vault. Set with `forge variables set --encrypt`. |
-| `GURTOS_AGENT_ACCOUNT` | The Jira app's Forge app | none | A Forge variable: the Atlassian account id of the agent. An issue assigned to it starts a task. Without it, adding the label `gurtos-agent` starts one. |
 
-The ASI:One app passes its own settings (`BOX_API`, `FETCH_*`) to the chat agent it starts. You do not set them.
 
 ## Related
 

@@ -77,7 +77,7 @@ The classes are
 - `<g-icon name="system-search"></g-icon>`: an Adwaita symbolic icon, 16 px, in the text color. `size="64"` for a
   status page, `label="Search"` when the icon is the only thing that names a control. `gurtos.icons` lists every name;
   the style guide shows them all. Ask the portal thread for one that is missing.
-- `<g-app-icon app="shopper" size="44"></g-app-icon>`: a GurtOS app icon. Apps without their own glyph get their first
+- `<g-app-icon app="find" size="44"></g-app-icon>`: a GurtOS app icon. Apps without their own glyph get their first
   letter on a grey tile (`title="Household"` picks the letter).
 - `gurtos.toast('Saved', { label: 'Undo', run: () => undo() })`: a toast at the bottom for four seconds.
 

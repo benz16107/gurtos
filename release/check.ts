@@ -22,7 +22,7 @@ const checks: [string, RegExp, ((m: string) => boolean)?][] = [
 const skip = (f: string) =>
   f === 'release/check.ts' || f === 'package-lock.json' || f.endsWith('/package-lock.json') ||
   /(^|\/)scripts\/privacy-check\.mjs$/.test(f) || f.startsWith('portal/dist/') && f.endsWith('.map');
-const allowUuidIn = /^(tracks\/jira\/forge\/manifest\.yml|core\/spacetime\/)/;
+const allowUuidIn = /^core\/spacetime\//;
 
 const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter((f) => f && !skip(f) && fs.existsSync(f));
 const perFile = new Map<string, number>();

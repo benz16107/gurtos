@@ -22,7 +22,7 @@ Who may read which key is declared in code, not decided at run time:
 - A **model job** lists its keys the same way.
 - An **app** lists the keys its routes and triggers may read in its own `secrets`.
 
-Asking for any other key throws an error. A tool that declares `STRIPE_SECRET_KEY` cannot read `WALLET_SOLANA_KEY`, even though both are in the same file. The owner can also turn one key off for one app in Settings, Permissions.
+Asking for any other key throws an error. A tool that declares `FIND_OLLAMA_URL` cannot read `ANTHROPIC_API_KEY`, even though both are in the same file. The owner can also turn one key off for one app in Settings, Permissions.
 
 You add keys on the box's screen: in setup, or in **Settings**, **Accounts & Keys**. The portal sends each key straight to the vault and never shows it again; it shows only which keys are set. Programs use the vault API, and root can edit the file. See [add a secret](/docs/guides/add-a-secret/).
 

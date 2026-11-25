@@ -141,7 +141,7 @@ What it does not protect against yet:
 - The disk is not encrypted, and root can read the vault and rewrite the log.
 
 The full model is in the [threat model](https://gurtos.com/docs/security/threat-model/). The attack scoreboard
-([tracks/armadin/SCOREBOARD.md](tracks/armadin/SCOREBOARD.md)) lists 41 attacks: 36 caught, and the 5 it does not
+([tracks/attacks/SCOREBOARD.md](tracks/attacks/SCOREBOARD.md)) lists 41 attacks: 36 caught, and the 5 it does not
 cover. Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## Phones, remote access and updates
@@ -192,10 +192,9 @@ arm64` and so on). [CONTRIBUTING.md](CONTRIBUTING.md) covers the test VM, the me
 | [`relay/`](relay/README.md) | The relay for remote access and push, to run yourself |
 | [`release/`](release/README.md) | How releases are built, signed and published, and the licence report |
 | `site/` | The docs at [gurtos.com](https://gurtos.com) |
-| `showcase/` | The Cal Hacks 13.0 showcase at [calhacks.gurtos.com](https://calhacks.gurtos.com) |
-| [`docs/`](docs/README.md) | Design notes and the hackathon's records |
+| [`docs/`](docs/README.md) | Design notes |
 
-GurtOS started as a weekend project at [Cal Hacks 13.0](https://calhacks.gurtos.com) in October 2026.
+GurtOS started as a weekend project at Cal Hacks 13.0 in October 2026. The Cal Hacks sponsor apps live at the tag `calhacks-2026`: [tracks/](https://github.com/benz16107/gurtos/tree/calhacks-2026/tracks).
 
 ## Licence
 

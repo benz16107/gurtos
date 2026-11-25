@@ -13,13 +13,13 @@ export const loopback = ['127.0.0.1', 'localhost'].includes(location.hostname);
 /** Today's spending, once the log has been read (before that a total would be too low). */
 export const spentToday = () => (box.logLoaded ? dollars(box.today.cents) : '…');
 export const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
-const ACRONYMS = new Set(['API', 'ID', 'URL', 'MLE', 'JWT', 'SSH', 'AWS', 'CDP', 'TAP', 'PAT', 'IMAP', 'SMTP', 'POP3', 'RPC', 'MCP', 'CRS', 'SSO', 'PEM', 'RSA', 'ASI', 'X402', 'USDC', 'JSM']);
+const ACRONYMS = new Set(['API', 'ID', 'URL', 'JWT', 'SSH', 'AWS', 'PAT', 'IMAP', 'SMTP', 'POP3', 'RPC', 'MCP', 'SSO', 'PEM', 'RSA']);
 /** A message from GurtOS as a sentence: capital first letter and a full stop ("the key is empty" reads "The key is empty."). */
 export const sentence = (m: string) => (m ? m[0].toUpperCase() + m.slice(1) + (/[.!?]$/.test(m) ? '' : '.') : m);
 /** Who answered or acted, for people: the box's own screen is "this computer's screen". */
 export const who = (by: string) => (by === 'box screen' ? "this computer's screen" : by);
 /** A key's name for people: ANTHROPIC_API_KEY is "Anthropic API key". The variable name stays a small caption. */
-const KEY_NAMES: Record<string, string> = { ASI_ONE_API_KEY: 'ASI:One API key', BACKUP_AGE_RECIPIENT: 'Backup encryption key' };
+const KEY_NAMES: Record<string, string> = { BACKUP_AGE_RECIPIENT: 'Backup encryption key' };
 export const keyLabel = (name: string) =>
   KEY_NAMES[name] ??
   name
@@ -74,7 +74,7 @@ export function askedAt(id: string) {
 export const needsModelKey = (t: Pick<Task, 'state' | 'error'>) =>
   t.state === 'failed' && /api[_ ]?key|FACTORY_API_KEY|ANTHROPIC_API_KEY|unauthori[sz]ed|\b401\b|authenticat|no model key|credentials/i.test(t.error ?? '');
 
-/** The track a task belongs to: its source up to the first colon ('shopper:buy:3' is Shopper's). */
+/** The track a task belongs to: its source up to the first colon ('factory:run:3' is Factory's). */
 export const trackOf = (t: Pick<Task, 'source'>) => t.source.split(':')[0];
 /** The app a task belongs to, for its icon and the App column. Tasks started by people or the API are Tasks'. */
 export function appOf(t: Pick<Task, 'source'>): { id: string; title: string } {
@@ -83,10 +83,10 @@ export function appOf(t: Pick<Task, 'source'>): { id: string; title: string } {
   return app ? { id, title: app.title.replace(/\s*\(.*\)$/, '') } : { id: 'tasks', title: 'Tasks' };
 }
 
-/** An app that moves only test money or works on sandbox data (Shopper, Agent wallet, Credit desk), from its own words. */
+/** An app that moves only test money or works on sandbox data (the Example app), from its own words. */
 export const testApp = (a: { title: string; description?: string }) => /\btest (money|payments?|data)\b|\bdevnet\b|\bsandbox\b/i.test(`${a.title} ${a.description ?? ''}`);
 /** App lists show GurtOS's own apps first (the model, Factory, the live board, the attack tests, the developer sample), then by name. */
-const OWN = ['anthropic', 'factory', 'spacetime', 'armadin', 'example'];
+const OWN = ['anthropic', 'factory', 'spacetime', 'attacks', 'example'];
 const rank = (id: string) => (OWN.includes(id) ? OWN.indexOf(id) : OWN.length);
 export const byApp = (x: { id: string; title: string }, y: { id: string; title: string }) => rank(x.id) - rank(y.id) || x.title.localeCompare(y.title);
 /** A task whose money is test money: one started by a test app. */
