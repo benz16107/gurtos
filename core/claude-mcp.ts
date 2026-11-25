@@ -1,9 +1,9 @@
 // The GurtOS MCP server for Claude Code and Claude Desktop: Claude on your own computer starts and watches tasks on a
 // box, answers its approvals, and undoes or keeps its work. It speaks MCP over stdio and calls the box's API with a
 // paired device's token, so it goes through the same approvals, budgets and log as a phone, and never sees a vault key.
-//   BOX_URL    the box: https://<name>.box.gurtos.com, or http://127.0.0.1:7700 on the box itself
-//   BOX_TOKEN  a paired device's token (pair a device named "Claude" from the box's screen); not needed on the box
-// claude mcp add gurtos --env BOX_URL=https://<name>.box.gurtos.com --env BOX_TOKEN=<token> -- node <repo>/core/claude-mcp.ts
+//   BOX_URL    the box: https://<name>.relay.example.com, or http://127.0.0.1:7700 on the box itself
+//   BOX_TOKEN  a paired device's token (pair a device named "Claude" from the box's screen); not needed on the box for root or the gurtos group
+// claude mcp add gurtos --env BOX_URL=https://<name>.relay.example.com --env BOX_TOKEN=<token> -- node <repo>/core/claude-mcp.ts
 //   BOX_MCP_ANSWER=on  also let Claude approve or deny requests (off by default: see box_answer_approval below)
 // Setup mode, for a new computer (AGENT-SETUP.md): BOX_SETUP_CODE=<the code on its screen> instead of BOX_TOKEN.
 // The code is traded for a setup token on first use, and the setup tools appear.
@@ -104,7 +104,7 @@ if (SETUP_CODE) {
     { name: 'setup_settings', description: 'Change settings, for example {"approvalThresholdCents":500,"defaultBudgetCents":100}. The computer checks each one.', inputSchema: obj({ patch: { type: 'object' } }, ['patch']), run: (a) => steps.settings(setupApi, a.patch) },
     { name: 'setup_apps', description: 'Every app and whether it is on.', inputSchema: obj({}), run: () => steps.apps(setupApi) },
     { name: 'setup_app', description: 'Turn an app on or off.', inputSchema: obj({ id: str, on: { type: 'boolean' } }, ['id', 'on']), run: (a) => steps.app(setupApi, a.id, a.on === true) },
-    { name: 'setup_remote', description: 'Turn on its https address at <name>.box.gurtos.com.', inputSchema: obj({ name: str }), run: (a) => steps.remote(setupApi, a.name) },
+    { name: 'setup_remote', description: 'Turn on its https address at <name>.relay.example.com.', inputSchema: obj({ name: str }), run: (a) => steps.remote(setupApi, a.name) },
     { name: 'setup_pair_phone', description: "A link and code for the owner's phone. Give the link to the owner: scanning or opening it pairs their phone as the owner's.", inputSchema: obj({}), run: () => steps.pair(setupApi) },
     { name: 'setup_finish', description: 'Finish setup. This ends your setup access, so run setup_doctor first and finish only when it is clean.', inputSchema: obj({}), run: () => steps.finish(setupApi) },
   );

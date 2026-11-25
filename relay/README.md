@@ -1,14 +1,16 @@
 # The relay: a secure address for every box
 
-The relay gives a GurtOS box an address like `https://rosa.box.gurtos.com` with no port forwarding at home, and
+The relay gives a GurtOS box an address like `https://rosa.relay.example.com` with no port forwarding at home, and
 forwards push notifications to the GurtOS app on a phone. It runs on its own small machine with a public address,
 not on a box. A box opts in from Settings ("Reach this computer from anywhere"); nothing changes until the owner does.
 
-The hosted relay at `box.gurtos.com` is not running as of October 29, 2026. To use remote access today, run your own
-([`docs/self-host.md`](../docs/self-host.md)) and point boxes at it with `BOX_RELAY`.
+There is no hosted relay: the one GurtOS ran at `box.gurtos.com` is offline, and no code points at any relay by default.
+To use remote access, run your own ([`docs/self-host.md`](../docs/self-host.md)) and point boxes at it with `BOX_RELAY`,
+or with the owner's relay setting in Settings. `RELAY_DOMAIN` is required: `server.ts` refuses to start without it.
+(`relay.example.com` in these docs stands for your own domain.)
 
 ```
-phone ──TLS for rosa.box.gurtos.com──▶ relay :443 ──same bytes, by SNI──▶ tunnel ──▶ box: Caddy (TLS ends here) ──▶ box API
+phone ──TLS for rosa.relay.example.com──▶ relay :443 ──same bytes, by SNI──▶ tunnel ──▶ box: Caddy (TLS ends here) ──▶ box API
                                                    ▲
 box ── outbound tunnel (frpc, TLS, pinned CA) ─────┘   :7000
 ```
@@ -21,7 +23,7 @@ On the relay (`relay/deploy`, Ubuntu 24.04):
 |---|---|
 | `frps` (frp 0.71.1) | Holds ports 443, 80 and 7000. On 443 it reads only the name in the TLS hello (SNI) and passes the connection to that box's tunnel as bytes. On 80 it routes plain HTTP by `Host`, for each box's HTTP-01 certificate challenge and its redirect to HTTPS. On 7000 boxes connect their tunnels. |
 | `server.ts` | Names, the frps plugin and the push gateway (below), on loopback only. Runs as its own user. |
-| Caddy and a local frpc | Serve the relay's own API at `https://box.gurtos.com`, published through frps the same way a box publishes itself. |
+| Caddy and a local frpc | Serve the relay's own API at `https://relay.example.com`, published through frps the same way a box publishes itself. |
 
 On a box (`core/remote.ts`, started by the box when the owner turns it on):
 
@@ -54,7 +56,7 @@ answers both HTTP-01 and TLS-ALPN-01 through the tunnel.
 
 ## The API
 
-`https://box.gurtos.com`:
+`https://relay.example.com`:
 
 | Request | Does |
 |---|---|
@@ -78,7 +80,7 @@ however long it stays up.
 frps asks `server.ts` before each `Login`, `NewProxy` and `Ping` (heartbeat, every 30 s). It allows:
 
 - a login only with a known name and that name's secret (constant-time compare), at most 30 a minute per box;
-- an `https` or `http` route only for exactly `<name>.box.gurtos.com`: no other domains, no raw TCP or UDP ports,
+- an `https` or `http` route only for exactly `<name>.relay.example.com`: no other domains, no raw TCP or UDP ports,
   no subdomains of other names. The relay, not the box, sets a 4 MB/s bandwidth limit per route;
 - a heartbeat only while the name is still enrolled, so releasing a name cuts its tunnel within 30 s. A heartbeat
   also counts as the box being seen, at most one write an hour, which is what keeps a long-lived tunnel's name from
@@ -95,12 +97,12 @@ with the key whose private half is on the relay, and hands that subscription to 
 3. It posts the ciphertext to `/v1/push` with its secret. The gateway checks the endpoint is a real push service
    (Google, Apple, Mozilla, Microsoft), signs a VAPID JWT for it, and forwards the bytes unchanged. It does not
    follow a redirect from the push service. The JWT's contact address is `RELAY_CONTACT`, or `https://<the relay's
-   domain>`, or `https://gurtos.com` on `box.gurtos.com`.
+   domain>`.
 
 ### The native apps (APNs)
 
 The GurtOS iPhone and Mac apps (`native/`) can't use web push, so they subscribe with an address on the relay,
-`https://box.gurtos.com/v1/apns/<app>/<production|sandbox>/<device token>`, and the same keys and per-box `mac` key
+`https://relay.example.com/v1/apns/<app>/<production|sandbox>/<device token>`, and the same keys and per-box `mac` key
 as the web app. A box needs no change: it encrypts for that subscription and posts it to `/v1/push` as always. The
 gateway accepts only the two GurtOS apps (`com.benzhou.gurtos`, `com.benzhou.gurtos.mac`, or the ids in `RELAY_APNS_TOPICS`) and a hex token, and sends
 Apple `{"aps": {"alert": {"title": "GurtOS", "body": "A request needs you"}, "mutable-content": 1}, "e": "<ciphertext>"}`.
@@ -131,7 +133,7 @@ box encrypts it for the phone before it reaches the gateway.
 
 What someone who controlled the relay **could** do, and what limits it:
 
-- **Get a certificate for a box's name.** The relay answers for every name under `box.gurtos.com`, so it could
+- **Get a certificate for a box's name.** The relay answers for every name under `relay.example.com`, so it could
   route a name to itself and pass Let's Encrypt's challenge. Every certificate issued is published in public
   Certificate Transparency logs (crt.sh), where a second certificate for a box's name would show. Even then it
   would still need a device's token to do anything with the box: pairing codes come only from the box's own
@@ -145,14 +147,14 @@ What someone who controlled the relay **could** do, and what limits it:
 ## Run and test
 
 ```
-RELAY_DOMAIN=box.example.com relay/deploy <ssh-host>   # install or update on the relay machine, over ssh as root
+RELAY_DOMAIN=relay.example.com relay/deploy <ssh-host>   # install or update on the relay machine, over ssh as root
 npm test                          # includes relay/server.test.ts and core/push.test.ts
 ./demo                            # relay/demo.ts: the protocol and push payloads, offline
 DEMO_LIVE=remote ./demo           # plus a real relay: a real name, certificate and push, then released
 ```
 
-`DEMO_LIVE=remote` uses the relay in `BOX_RELAY` (default `box.gurtos.com`), so while the hosted relay is down it
-needs your own, with `BOX_RELAY` set where the demo runs.
+`DEMO_LIVE=remote` uses the relay in `BOX_RELAY`, which has no default, so it needs your own, with `BOX_RELAY` set where
+the demo runs.
 
 `relay/testphone.ts` is a stand-in phone for the live test: a real subscription at Mozilla's push service, made
 by speaking its WebSocket protocol, which decrypts what arrives.
@@ -169,3 +171,10 @@ by speaking its WebSocket protocol, which decrypts what arrives.
   names, 20 an hour per address and 200 an hour in all, and an unused name stays taken for 30 days, so a determined
   caller can use up a relay's enrollments for a while.
 - The rate limits are kept in memory and reset when the relay restarts.
+
+## The web app's security policy
+
+`relay/app/vercel.json` carries the web app's Content-Security-Policy. It names no relay. `RELAY_DOMAIN=<your domain>
+relay/deploy-app` adds `https://<domain>` and `https://*.<domain>` to it, so the browser lets the app reach your relay
+and your boxes. If you deploy the app another way, add those two sources to `connect-src`, `frame-src` and `img-src`
+yourself.

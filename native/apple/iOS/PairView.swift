@@ -107,7 +107,7 @@ struct PairSheet: View {
   var typed: some View {
     Form {
       Section {
-        TextField("192.168.1.20 or rosa.\(GurtConfig.relayHost)", text: $address)
+        TextField(GurtConfig.relayHost.map { "192.168.1.20 or rosa.\($0)" } ?? "192.168.1.20", text: $address)
           .textContentType(.URL).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
         TextField("Code", text: $code).textInputAutocapitalization(.never).autocorrectionDisabled().font(.g(.title3).monospaced())
       } header: { Text("The computer's address and code") } footer: { Text("Both are under the QR code on the computer's screen.") }

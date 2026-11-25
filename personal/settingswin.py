@@ -10,7 +10,7 @@ import setupwin
 import tasklogic as tl
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from boxapi import api, background, relay_up, remote_view
+from boxapi import NO_RELAY, api, background, relay_up, remote_view
 from setupwin import SetupWindow, boxed, page, row
 
 PAGES = [  # (id, title, icon)
@@ -26,7 +26,7 @@ RETENTION = [30, 90, 365, 3650]
 HOURS = [('22:00', '07:00'), ('23:00', '07:00'), ('21:00', '06:00'), ('00:00', '08:00'), ('20:00', '08:00')]
 
 
-NAME = re.compile(r'^[a-z0-9-]{3,30}$')  # a box's name under box.gurtos.com; the relay may refuse more (reserved names)
+NAME = re.compile(r'^[a-z0-9-]{3,30}$')  # a box's name under the relay's domain; the relay may refuse more (reserved names)
 
 
 def remote_state():
@@ -388,14 +388,14 @@ class SettingsWindow(SetupWindow):
 
     def remote_section(self, box):
         r = self.remote
-        relay = r.get('relay', 'box.gurtos.com')
+        relay = r.get('relay')  # None: no relay is set
         lst = section(box, 'Reach this computer from anywhere',
                       'Your computer gets its own secure address. The relay only passes encrypted traffic along and cannot read it. '
                       'Every phone still needs a pairing code.')
         if r.get('enabled') or r.get('state') in ('starting', 'connected', 'error'):
             words = {'starting': 'Starting. Getting a certificate, which takes up to a minute.', 'connected': 'On. Phones you pair can reach it from anywhere.',
                      'error': f"Not connected: {r.get('error') or 'the relay did not answer'}", 'off': 'Off'}
-            addr = row(r.get('url') or f"https://{r.get('name')}.{relay}", words.get(r.get('state'), r.get('state', '')), 'network-server-symbolic')
+            addr = row(r.get('url') or f"https://{r.get('name')}.{relay or ''}", words.get(r.get('state'), r.get('state', '')), 'network-server-symbolic')
             addr.set_title_selectable(True)
             if r.get('state') == 'starting':
                 addr.add_suffix(Gtk.Spinner(spinning=True, valign=Gtk.Align.CENTER))
@@ -405,9 +405,12 @@ class SettingsWindow(SetupWindow):
             addr.add_suffix(off)
             lst.append(addr)
             return
-        if not r.get('relayUp'):  # the hosted relay can be offline: say so, rather than fail on every name
+        if not relay:  # no relay is set: say so at once, and make no request
+            lst.append(row('No relay is set up', NO_RELAY, 'network-offline-symbolic'))
+            return
+        if not r.get('relayUp'):  # the relay can be offline: say so, rather than fail on every name
             lan = any(b.get('self') and str(b.get('url') or '').startswith('http://') for b in self.boxes)
-            down = row('Not available right now', f"This goes through the GurtOS relay at {relay}, and it isn't answering."
+            down = row('Not available right now', f"This goes through the relay at {relay}, and it isn't answering."
                        + (' Phones on the same Wi-Fi as this computer can still pair.' if lan else ''), 'network-offline-symbolic')
             down.add_suffix(button_for('Try again', lambda: self.reload('phone')))
             lst.append(down)

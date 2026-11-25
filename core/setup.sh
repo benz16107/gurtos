@@ -48,7 +48,10 @@ if ! have_node; then
   tmp=$(mktemp -d)
   curl -fsSL "$base/$file" -o "$tmp/$file"
   (cd "$tmp" && curl -fsSL "$base/SHASUMS256.txt" | grep " $file\$" | sha256sum -c -)
-  tar -xJf "$tmp/$file" -C /usr/local --strip-components=1 --exclude CHANGELOG.md --exclude README.md --exclude LICENSE
+  # Its own folder, linked from /usr/local/bin: nothing else in /usr/local is overwritten, and uninstall removes it whole.
+  rm -rf /usr/local/lib/gurtos-node && mkdir -p /usr/local/lib/gurtos-node
+  tar -xJf "$tmp/$file" -C /usr/local/lib/gurtos-node --strip-components=1 --exclude CHANGELOG.md --exclude README.md
+  for b in /usr/local/lib/gurtos-node/bin/*; do ln -sfn "$b" /usr/local/bin/; done
   rm -rf "$tmp"
 fi
 node -v
@@ -127,4 +130,4 @@ if [ "$(cat $unit 2>/dev/null)" != "$want" ]; then
   systemctl enable spacetimedb.service >/dev/null 2>&1
   systemctl restart spacetimedb.service
 fi
-spacetime --version | head -1
+spacetime --version 2>/dev/null | head -1 # its "new version available" notice is on stderr

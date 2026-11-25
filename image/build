@@ -340,7 +340,7 @@ printf 'GurtOS %s %s\n' "$Edition" "$version" > "$root/etc/issue.net"
 [[ $edition == personal ]] && printf 'EDITION=personal\nSLOT_MB=12288\n' >> "$root/etc/box-os/release"
 
 if [[ $edition == server ]]; then in_root bash -euo pipefail -c '
-  useradd --system --home-dir /var/lib/kiosk --create-home --shell /usr/sbin/nologin kiosk
+  useradd --system --home-dir /var/lib/kiosk --create-home --shell /usr/sbin/nologin -G gurtos kiosk # the screen: core/net.ts trustedUid
   usermod -p "!" root
   # State lives on the data partition. These are its mount points; what the image put there is hidden at boot.
   rm -rf /etc/box /var/lib/box /var/lib/spacetimedb /root/.config/spacetime

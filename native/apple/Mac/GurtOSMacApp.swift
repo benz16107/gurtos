@@ -270,7 +270,7 @@ struct MacPairView: View {
         .overlay(Label("Drop a picture of the QR code", systemImage: "qrcode.viewfinder").foregroundStyle(.secondary))
         .onDrop(of: [.fileURL, .image], isTargeted: $dropping) { providers in read(providers); return true }
       Form {
-        TextField("Address or link", text: $address, prompt: Text("192.168.1.20 or rosa.\(GurtConfig.relayHost)"))
+        TextField("Address or link", text: $address, prompt: Text(GurtConfig.relayHost.map { "192.168.1.20 or rosa.\($0)" } ?? "192.168.1.20"))
         TextField("Code", text: $code)
       }
       if let error { Text(error).foregroundStyle(Color.gDestructiveFg) }

@@ -3,7 +3,7 @@ import Foundation
 
 /** One paired machine: its address, this device's token for it and what the app remembers about it. */
 public struct Machine: Codable, Identifiable, Hashable, Sendable {
-  /** The computer's origin, like https://rosa.box.gurtos.com (through the relay) or http://192.168.1.20:7700 (home network). */
+  /** The computer's origin, like https://rosa.relay.example.com (through the relay) or http://192.168.1.20:7700 (home network). */
   public var url: String
   public var token: String
   public var boxId: String
@@ -54,8 +54,8 @@ public struct PairingLink: Equatable, Sendable {
   /**
    * Every form a computer shows (core/README.md, "Remote access"):
    * - http://192.168.1.20:7700/pair#CODE (`boxUrl`, its own page on the home network: the QR with remote access off)
-   * - https://rosa.box.gurtos.com/pair#CODE (`boxUrl` with remote access on)
-   * - https://app.gurtos.com/pair?box=rosa.box.gurtos.com#CODE (`url` with remote access on)
+   * - https://rosa.relay.example.com/pair#CODE (`boxUrl` with remote access on)
+   * - https://app.gurtos.com/pair?box=rosa.relay.example.com#CODE (`url` with remote access on)
    * - http://192.168.1.20:7700/#pair/CODE (the older link)
    */
   public static func parse(_ text: String) -> PairingLink? {
@@ -80,13 +80,13 @@ public struct PairingLink: Equatable, Sendable {
     return PairingLink(box: box, code: fragment)
   }
 
-  /** Typed by hand: an address ("192.168.1.20", "rosa.box.gurtos.com") and the code, which may have been read off as "8120 D849". */
-  public static func typed(address: String, code: String) -> PairingLink? {
+  /** Typed by hand: an address ("192.168.1.20", "rosa.relay.example.com") and the code, which may have been read off as "8120 D849". */
+  public static func typed(address: String, code: String, relayHost: String? = GurtConfig.relayHost) -> PairingLink? {
     let a = address.trimmingCharacters(in: .whitespacesAndNewlines)
     let c = code.filter { !$0.isWhitespace }
     guard !a.isEmpty, isCode(c) else { return nil }
     // A computer's name on the relay is https; anything else is its own port on the home network.
-    let withScheme = a.contains("://") ? a : (GurtConfig.isRelayName(a) ? "https://\(a)" : "http://\(a)")
+    let withScheme = a.contains("://") ? a : (GurtConfig.isRelayName(a, relayHost: relayHost) ? "https://\(a)" : "http://\(a)")
     guard let u = URLComponents(string: withScheme), let host = u.host, !host.isEmpty else { return nil }
     var origin = URLComponents()
     origin.scheme = u.scheme
@@ -134,8 +134,9 @@ public struct Rendezvous: Equatable, Sendable {
   public var lanLink: PairingLink? { lan.flatMap { URL(string: "http://\($0)") }.map { PairingLink(box: $0, code: code) } }
 
   /** The relay's answer must be a computer's name under its domain, nothing else: it decides where the code is sent. */
-  public static func checkedHost(_ host: String) -> URL? {
-    let domain = NSRegularExpression.escapedPattern(for: GurtConfig.relayHost)
+  public static func checkedHost(_ host: String, relayHost: String? = GurtConfig.relayHost) -> URL? {
+    guard let relayHost else { return nil }
+    let domain = NSRegularExpression.escapedPattern(for: relayHost)
     guard host.range(of: "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]\\.\(domain)$", options: .regularExpression) != nil else { return nil }
     return URL(string: "https://\(host)")
   }
@@ -144,7 +145,8 @@ public struct Rendezvous: Equatable, Sendable {
    * Pair over the internet: ask the computer (PUT /v1/rv/<id>/ask), then wait for its address or its error, polling
    * each with ?wait=25 until one answers 200. Gives up after about 3 minutes, or at once when the relay is down.
    */
-  public func resolve(relay: URL = GurtConfig.relay, session: URLSession = .shared) async throws -> PairingLink {
+  public func resolve(relay: URL? = GurtConfig.relay, session: URLSession = .shared) async throws -> PairingLink {
+    guard let relay else { throw BoxError(status: 0, message: GurtConfig.noRelay) } // no relay: no request, no wait
     guard let id else { throw BoxError(status: 0, message: "This code can't be paired over the internet.") }
     let base = relay.appending(path: "v1/rv/\(id)")
     var ask = URLRequest(url: base.appending(path: "ask"), timeoutInterval: 20)
@@ -160,7 +162,7 @@ public struct Rendezvous: Equatable, Sendable {
     return try await withThrowingTaskGroup(of: PairingLink?.self) { g in
       g.addTask {
         let o = try await poll("host")
-        guard let h = o["host"] as? String, let box = Rendezvous.checkedHost(h) else { throw BoxError(status: 0, message: "The relay gave an address that isn't a GurtOS computer.") }
+        guard let h = o["host"] as? String, let box = Rendezvous.checkedHost(h, relayHost: relay.host) else { throw BoxError(status: 0, message: "The relay gave an address that isn't a GurtOS computer.") }
         return PairingLink(box: box, code: self.code)
       }
       g.addTask { throw BoxError(status: 0, message: (try await poll("error"))["error"] as? String ?? "The computer refused the request.") }

@@ -189,12 +189,13 @@ export function relayCert(home: string) {
   return { key: fs.readFileSync(path.join(dir, 'leaf.key')), cert: fs.readFileSync(path.join(dir, 'leaf.pem')), caPem };
 }
 
-/** The uid that owns the other end of a loopback connection, from /proc/net/tcp. */
+/** The uid that owns the other end of a loopback connection, from /proc/net/tcp (or tcp6 for ::1). */
 export function uidOf(sock: net.Socket): number | undefined {
-  const hex = (port: number) => `0100007F:${port.toString(16).toUpperCase().padStart(4, '0')}`;
+  const v6 = sock.remoteAddress === '::1';
+  const hex = (port: number) => `${v6 ? '00000000000000000000000001000000' : '0100007F'}:${port.toString(16).toUpperCase().padStart(4, '0')}`;
   const pair = ` ${hex(sock.remotePort ?? 0)} ${hex(sock.localPort ?? 0)} `; // the client's line: its local address, then the box's
   // Searched, not split into lines: a task holding many connections makes the table long, and this runs for each one.
-  const table = fs.readFileSync('/proc/net/tcp', 'utf8');
+  const table = fs.readFileSync(v6 ? '/proc/net/tcp6' : '/proc/net/tcp', 'utf8');
   const at = table.indexOf(pair);
   if (at >= 0) return Number(table.slice(at + 1, table.indexOf('\n', at)).split(/\s+/)[6]); // local rem st queues timer retransmits uid
 }
@@ -219,6 +220,33 @@ export function fromScreen(addr: string | undefined, h: http.IncomingHttpHeaders
   } catch {
     return false; // "null", from a sandboxed page or a file
   }
+}
+
+/** The group whose members may use GurtOS as its owner from this machine (a browser, the CLI, `ssh -L`). */
+export const OWNER_GROUP = 'gurtos';
+
+/**
+ * Whether the account behind a loopback connection may act as this computer's own screen: root, the Personal owner
+ * (`owner`, an account name), or a member of OWNER_GROUP. Anyone else on the machine (another login, a service, a
+ * task) is a stranger and needs a paired token. Read from the account files on each new connection, so adding
+ * someone to the group needs no new login. Task users never are, whatever group they are put in.
+ */
+export function trustedUid(uid: number | undefined, owner?: string | null, files = { passwd: '/etc/passwd', group: '/etc/group' }): boolean {
+  if (uid === undefined || (uid >= 30000 && uid <= 39999)) return false;
+  if (uid === 0) return true;
+  // shortcut: local accounts only (no LDAP or sssd); switch to getent if a directory-backed group is needed
+  const rows = (f: string) => {
+    try {
+      return fs.readFileSync(f, 'utf8').split('\n').map((l) => l.split(':'));
+    } catch {
+      return [];
+    }
+  };
+  const me = rows(files.passwd).find((p) => p.length >= 4 && p[2] === String(uid));
+  if (!me) return false;
+  if (owner && me[0] === owner) return true;
+  const g = rows(files.group).find((x) => x[0] === OWNER_GROUP && x.length >= 3);
+  return !!g && (g[2] === me[3] || (g[3] ?? '').split(',').includes(me[0]));
 }
 
 /**

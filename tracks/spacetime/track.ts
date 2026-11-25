@@ -153,9 +153,9 @@ export default {
         scoped,
       });
     }),
-    /** Put jobs on a queue from the box's screen or a helper on the box. */
+    /** Put jobs on a queue from the box's screen or the owner's phone. */
     'POST /jobs': async (req, box) => {
-      if (!['screen', 'owner', 'service'].includes(req.headers.get('x-box-caller') ?? '')) return forbid();
+      if (!['screen', 'owner'].includes(req.headers.get('x-box-caller') ?? '')) return forbid();
       try {
         const body = await req.json();
         const queue = checkQueue(body?.queue);

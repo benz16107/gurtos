@@ -8,7 +8,7 @@ import { keyLabel } from '../util.ts';
 import { Qr } from './settings.tsx';
 import { pairWith } from '../shell.tsx';
 import { openSealed, phoneKey, type Sealed } from './qs-crypto.ts';
-import { RELAY, onRelay } from '../relay.ts';
+import { NO_RELAY, RELAY, onRelay } from '../relay.ts';
 
 
 interface View {
@@ -92,6 +92,7 @@ interface Ask {
 
 /** The new computer's answer, sealed to this phone: its address and a one-time owner code. Up to 5 minutes. */
 async function waitForOwnerCode(rv: string): Promise<Sealed> {
+  if (!RELAY) throw new Error(NO_RELAY);
   for (const end = Date.now() + 300_000; Date.now() < end; ) {
     const started = Date.now();
     const r = await fetch(`${RELAY}/v1/rv/${encodeURIComponent(rv)}/owner?wait=25`, { signal: AbortSignal.timeout(35_000) }).catch(() => undefined);

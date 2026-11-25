@@ -53,7 +53,7 @@ export default {
     'GET /approve': () => new Response('<!doctype html><p>This page keeps the box\'s own origin.</p>', { headers: { 'content-type': 'text/html' } }),
     'GET /': () => new Response('<!doctype html><h1>Example app</h1>', { headers: { 'content-type': 'text/html' } }),
     // A route reading a vault secret directly (no model-job workaround). It returns a derived fact, never the secret.
-    // Who is calling, as the box says: 'screen', 'owner', 'device:<id>', 'service' or 'none'.
+    // Who is calling, as the box says: 'screen', 'owner', 'device:<id>' or 'none'.
     'GET /whoami': (req) => Response.json({ caller: req.headers.get('x-box-caller') }),
     'GET /secret-check': (_req, box) => {
       try {

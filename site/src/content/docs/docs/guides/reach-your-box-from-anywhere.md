@@ -8,8 +8,10 @@ sidebar:
 ---
 
 A box answers on its own network: a phone on the same Wi-Fi can pair with it and approve its requests (see
-[Approve from your phone](/docs/guides/approve-from-your-phone/)). To reach it from somewhere else, pick one of two
-ways.
+[Approve from your phone](/docs/guides/approve-from-your-phone/)). To reach it from somewhere else, there are two ways
+today: run your own relay ([relay/README.md](https://github.com/benz16107/gurtos/blob/main/relay/README.md)), or use a
+private network such as Tailscale. On a private network the box's API listens on the network's address (`BOX_LISTEN`),
+and a remote phone still needs a paired device's token.
 
 | Compare | A private network | A relay you run |
 |---|---|---|
@@ -22,11 +24,12 @@ A private network is the simple choice and needs nothing from GurtOS. A relay ad
 notifications.
 
 :::note[Preview]
-GurtOS's own hosted relay at `box.gurtos.com` is not running during the preview. Until it is, Remote access in
-Settings says the relay is not answering and links to the self-host guide. Your box keeps working on its own network.
+There is no hosted relay. The one at `box.gurtos.com` is offline, and a box uses no relay until you set one, with
+`BOX_RELAY` or in Settings. With none set, Remote access says so at once, links to the self-host guide, and makes no
+request. Your box keeps working on its own network.
 :::
 
-![Settings, Remote access on a box whose relay is not answering: the name field, a greyed Turn on button with the reason, and Use your own relay.](../../../../assets/screens/remote-access.png)
+![Settings, Remote access on a box with a relay that is not answering: the name field, a greyed Turn on button with the reason, and Use your own relay.](../../../../assets/screens/remote-access.png)
 
 ## Over a private network
 
@@ -58,7 +61,7 @@ You have sudo on these, so you can put the box itself on the private network:
 
 ## Through a relay you run
 
-A relay gives the box an address such as `https://rosa.box.example.com` with no port forwarding on your router, and
+A relay gives the box an address such as `https://rosa.relay.example.com` with no port forwarding on your router, and
 forwards push notifications to phones. It is off until the owner turns it on.
 
 ### How it works
@@ -83,11 +86,11 @@ relay's address under **Relay** and choose **Save**. Or, from the box itself or 
 
 ```sh
 curl -s -X PUT http://127.0.0.1:7700/api/remote/relay \
-  -H 'content-type: application/json' -d '{"url": "https://box.example.com"}'
+  -H 'content-type: application/json' -d '{"url": "https://relay.example.com"}'
 ```
 
 The box checks that the address is https, is a public host name and resolves to a public address, then saves it.
-`{"url": null}` goes back to the default. `GET /api/remote/relay` shows the relay in use. Setting `BOX_RELAY` in the
+`{"url": null}` goes back to `BOX_RELAY`, or to none. `GET /api/remote/relay` shows the relay in use. Setting `BOX_RELAY` in the
 box's service does the same; see [Run your own relay](/docs/guides/self-host/#3-point-boxes-at-the-relay).
 
 ### Turn it on
@@ -106,9 +109,9 @@ off and on again also issues a new relay secret.
 ### The web app and notifications
 
 Every box serves the GurtOS web app at its own address. With a relay, the box's pairing QR codes open the web app
-named by `BOX_APP` (default `https://app.gurtos.com`) with the box's https address in the link. The app at
-`app.gurtos.com` only connects to `box.gurtos.com` addresses, so with your own relay, host your own copy of the web
-app and set `BOX_APP` to it. [Run your own relay](/docs/guides/self-host/#4-build-and-host-the-web-app) says how.
+named by `BOX_APP` (default `https://app.gurtos.com`) with the box's https address in the link. The hosted app at
+`app.gurtos.com` has no relay of its own, so with your relay the pairing link opens the box's own address instead. To
+use the web app's machine list, host your own copy of the app and set `BOX_APP` to it. [Run your own relay](/docs/guides/self-host/#4-build-and-host-the-web-app) says how.
 GurtOS Server has no shell to set `BOX_APP`: open `https://<name>.<relay domain>/pair#<code>` on the phone instead,
 which works but cannot turn on push notifications yet.
 

@@ -118,13 +118,14 @@ final class AppState {
   /** Give every paired machine this phone's push subscription, with a key made for that machine alone. */
   func subscribeAll() async {
     guard let token = deviceToken else { return }
-    let keys = PushKeys.loadOrMake(keychain)
     #if DEBUG
     let sandbox = true
     #else
     let sandbox = false
     #endif
-    let endpoint = apnsEndpoint(topic: Bundle.main.bundleIdentifier ?? "com.benzhou.gurtos", deviceToken: token, sandbox: sandbox)
+    // No relay, no push registration: the box could not send through it.
+    guard let endpoint = apnsEndpoint(topic: Bundle.main.bundleIdentifier ?? "com.benzhou.gurtos", deviceToken: token, sandbox: sandbox) else { return }
+    let keys = PushKeys.loadOrMake(keychain)
     for var m in model.machines {
       let key = m.pushKey ?? Base64URL.encode(randomBytes(32))
       if m.pushKey == nil { m.pushKey = key; model.update(m) }

@@ -263,10 +263,10 @@ so it goes through the same approvals, budgets and log as a phone, and it never 
 "Claude" from the box's screen, then:
 
 ```sh
-claude mcp add gurtos --env BOX_URL=https://<name>.box.gurtos.com --env BOX_TOKEN=<token> -- node /path/to/gurtos/core/claude-mcp.ts
+claude mcp add gurtos --env BOX_URL=https://<name>.relay.example.com --env BOX_TOKEN=<token> -- node /path/to/gurtos/core/claude-mcp.ts
 ```
 
-On the box itself, `BOX_URL=http://127.0.0.1:7700` and no token. Keep needs a device paired as the owner.
+On the box itself, `BOX_URL=http://127.0.0.1:7700` and no token, run as root or as a member of the `gurtos` group. Keep needs a device paired as the owner.
 
 ## Tripwire keys and the task sandbox
 
@@ -317,7 +317,7 @@ Make `tracks/<name>/track.ts` and default-export a `Track` with any of these slo
 | `routes` | `'POST /hook': (req, box) => Response`, served at `/t/<name>/hook` on the box's API. Webhooks go here. |
 | `secrets` | Vault keys this track's routes and triggers may read with `box.secret(name)`. Tools and jobs declare their own. |
 | `optionalSecrets` | Keys among the app's declared secrets it can run without (it falls back to test mode). The App Center marks them `optional: true`, and setup asks only for the others. |
-| `x-box-caller` | Not a slot: a header on the Request every route gets, set by the box (a copy the caller sends is replaced): `screen` (the box's own screen), `owner` (a phone paired as the owner), `device:<id>` (another paired phone), `service` (a helper on the box) or `none` (an open route reached through a proxy with no token). On a Business box, `x-box-person` carries the calling person's id (absent otherwise); the `box` the route gets already acts as that person. |
+| `x-box-caller` | Not a slot: a header on the Request every route gets, set by the box (a copy the caller sends is replaced): `screen` (the box's own screen), `owner` (a phone paired as the owner), `device:<id>` (another paired phone) or `none` (an open route reached with no token). On a Business box, `x-box-person` carries the calling person's id (absent otherwise); the `box` the route gets already acts as that person. |
 | `openRoutes` | Route keys (like `'GET /status'`) that need no paired-phone token, even for a request that arrives through a public proxy. For a route that is public on purpose, or checks its own secret. Every other route needs a phone. An open route must return nothing private unless its own check passes. |
 | `ownOrigin` | Route keys whose HTML page is served with the box's own origin instead of the sandbox (*An app's window*): only for a page that cannot work without one, such as a passkey ceremony. It runs with the box's origin, so review it like core code. The window token and every other rule still apply. |
 
@@ -372,8 +372,9 @@ copies them into each run's vault.
 ## Setup, Settings, App Center and the vault
 
 What the first-run wizard, Settings and the App Center are built on. **Who may call what.** Anything that
-changes setup, settings, apps or the vault is for the owner only: the box's own screen (a request from this
-machine, or over its socket, with no proxy header such as `X-Forwarded-For`) or a phone paired as the owner. A
+changes setup, settings, apps or the vault is for the owner only: the box's own screen (a request over its socket,
+or from this machine by root, the owner's account or a member of the `gurtos` group, with no proxy header such as
+`X-Forwarded-For`) or a phone paired as the owner. A
 request relayed by a reverse proxy or a tailnet serve looks local to the box but carries those headers, so it
 does not count. Everything else gets a `403`. Reads of `/api/setup`, `/api/settings`, `/api/system` and `/api/apps`
 are open like the rest of the API. To pair the owner's phone, the box's own screen calls
@@ -417,9 +418,24 @@ it again with no reinstall. The choice is saved in `apps.json`, so it survives a
 
 ## Who may reach the API
 
-**From the box's own screen** (a request on this machine, over the socket or loopback, with no proxy header, a
-`Host` that is `127.0.0.1`, `localhost` or `[::1]`, and no `Origin` other than the box's own address on the API's
-port) the API is open, as it always was. A web page from another site in a browser on the box (GurtOS Personal)
+**From the box's own screen** (a request over the root-only socket, or from loopback with no proxy header, a
+`Host` that is `127.0.0.1`, `localhost` or `[::1]`, no `Origin` other than the box's own address on the API's port,
+and from a trusted account) the API is open, with the owner's rights. The trusted accounts are root, the Personal
+owner (`BOX_OWNER`, or the owner set with `PUT /api/owner`) and members of the `gurtos` group, which the installer
+creates and adds you and the Server screen's `kiosk` account to. The box finds the account behind a loopback
+connection in `/proc/net/tcp` (`uidOf`, the same lookup the proxy uses for tasks) and checks it against
+`/etc/passwd` and `/etc/group` once per connection (`trustedUid` in `net.ts`). **Any other account on the machine**
+(another person's login, a service such as `nobody`, a task user) is treated like a phone: no token, `401`.
+
+Why this and not a token: the clients that act as the screen are a browser on the machine, the box's kiosk, the
+Personal desktop windows, `curl` and the CLI, and `ssh -L` from your laptop (the forwarded connection belongs to
+your login). All of them already run as some account, so checking that account needs no token file, no sign-in
+link and no change to any client. A root-only Unix socket with `SO_PEERCRED` would be as sound, but a browser cannot
+use one. A token file readable by a group needs the same group, and a browser still cannot read it. Group
+membership is read from the files, so `sudo usermod -aG gurtos <you>` takes effect on the next connection, without
+logging in again. Local accounts only: a group from LDAP or sssd is not seen.
+
+A web page from another site in a browser on the box (GurtOS Personal)
 also arrives from loopback, but its `Origin` gives it away, and a page that points its own name at 127.0.0.1 (DNS
 rebinding) sends its own `Host`; both are treated as remote and need a paired token. So does a page any other
 server on this machine serves (an agent's dev server on `localhost:8000`), unless its origin is in `BOX_ORIGINS`. **From anywhere else every request must carry a paired phone's token**, as
@@ -586,8 +602,8 @@ spend or the largest dollar figure in the question up to its first "?" (not the 
 **Who may answer** (`POST /api/approvals/<id>`, and `box.answer` from a track), checked again at the moment of the
 answer against the people as they are now. Each refusal is a `403` with the reason and a `business` note in the log.
 
-1. Only a person. A tool, a trigger, a log reader, a helper service on the box (running as nobody or a task user) or
-   a screen that has not said who it is gets "Only a person can answer". No agent approves an agent.
+1. Only a person. A tool, a trigger, a log reader or a screen that has not said who it is gets "Only a person can
+   answer". Another account on the box (a helper service, a task user) is not the screen and needs a token first. No agent approves an agent.
 2. Never your own request: "You asked for this, so someone else has to answer it."
 3. Only an owner, admin or approver, and only what the policy sends to a name they approve for.
 4. Approving only within your limit. Denying above it is allowed.
@@ -877,8 +893,8 @@ Column names are camelCase in the TypeScript client and snake_case in SQL (`cost
 
 ## Remote access and push notifications
 
-**Reach this computer from anywhere** (opt in, owner only) gives the box its own address, `https://<name>.box.gurtos.com`,
-through the GurtOS relay (`relay/README.md`). The box opens an outbound tunnel (frpc), so nothing is forwarded at
+**Reach this computer from anywhere** (opt in, owner only) gives the box its own address, `https://<name>.relay.example.com`,
+through a relay you run (`relay/README.md`). There is no hosted relay and no default: with none set, turning it on, push and Quick Start refuse at once with a sentence, and make no request. The box opens an outbound tunnel (frpc), so nothing is forwarded at
 home, and gets its own Let's Encrypt certificate (Caddy on 127.0.0.1). TLS ends on the box: the relay passes the
 encrypted bytes by name and cannot read them. Requests through it carry `X-Forwarded-For`, so they need a paired
 device's token like any other off-box request. Code: `core/remote.ts`. State: `BOX_HOME/remote.json`,
@@ -886,17 +902,16 @@ device's token like any other off-box request. Code: `core/remote.ts`. State: `B
 
 | Request | Does |
 |---|---|
-| `GET /api/remote` | `{enabled, name, url, state: off, starting, connected or error, error?, relay}`. Checks the address again at most every 30 s. |
+| `GET /api/remote` | `{enabled, name, url, state: off, starting, connected or error, error?, relay}`; `relay` is the relay's host, or `null` when none is set. Checks the address again at most every 30 s. |
 | `GET /api/remote/name/<name>` | Owner. Asks the relay: `{name, available, reason?}` |
 | `POST /api/remote {name}` | Owner. Enrolls the name, starts the tunnel and TLS, returns `state: starting`; poll until `connected` (5 to 60 s for a new certificate). Names: lowercase letters, digits and hyphens, 3 to 30 characters, some reserved. |
 | `DELETE /api/remote` | Owner. Stops both, releases the name at the relay (`released`), removes the secret. The certificate is kept for next time. |
-| `GET /api/remote/relay` | `{url, default, custom}`: the relay in use (`https://...`), the box's default (`BOX_RELAY`, else `https://box.gurtos.com`), and whether the owner chose this one |
-| `PUT /api/remote/relay {url}` | Owner, while remote access is off (`409` otherwise). Use your own relay (`relay/README.md`): an `https://` host name with no path, query or login, that resolves only to public addresses; anything else is a `400` naming why. `{url: null}` goes back to the default. Saved in `BOX_HOME/relay.json`. Pushes and Quick Start use the same relay. |
+| `GET /api/remote/relay` | `{url, default, custom}`: the relay in use (`https://...`), the box's default (`BOX_RELAY`), and whether the owner chose this one. `url` and `default` are `null` when no relay is set |
+| `PUT /api/remote/relay {url}` | Owner, while remote access is off (`409` otherwise). Use your own relay (`relay/README.md`): an `https://` host name with no path, query or login, that resolves only to public addresses; anything else is a `400` naming why. `{url: null}` goes back to `BOX_RELAY`, or to none. Saved in `BOX_HOME/relay.json`. Pushes and Quick Start use the same relay. |
 
-While it is on, `POST /api/pair/start` returns `url: https://app.gurtos.com/pair?box=<name>.box.gurtos.com#<code>` (the
-GurtOS app adds the box to its machines) and `boxUrl`, the box's own `https://.../pair#<code>`. With your own relay and
-the hosted app (which accepts only its own relay's addresses), `url` is the computer's own address on your relay,
-`https://<name>.<relay host>/pair#<code>`; `GET /api/boxes`
+While it is on, `POST /api/pair/start` returns `boxUrl`, the box's own `https://<name>.<relay host>/pair#<code>`. With the
+hosted app (which has no relay of its own), `url` is the same address. With your own app (`BOX_APP`), `url` is
+`https://<your app>/pair?box=<name>.<relay host>#<code>`, and the app adds the box to its machines; `GET /api/boxes`
 reports the https address. The API allows CORS from `https://app.gurtos.com` (always) and `BOX_ORIGINS`.
 
 **Push notifications** reach the GurtOS app on a phone. The app subscribes once with the relay gateway's VAPID key
@@ -930,14 +945,14 @@ always deny. core/demo.ts checks each of these; native/demo.ts checks every call
 The apps read `owner` from `GET /api/me` to decide whether to show owner controls such as the kill switch, and pair
 from the link in a pairing QR: the computer's own page on the home network (`boxUrl` from `POST /api/pair/start`)
 unless remote access is on. A test notification that cannot be sent is a `502` whose error is a sentence ("The
-notification was not sent: the relay at box.gurtos.com isn't answering.").
+notification was not sent: the relay at relay.example.com isn't answering.").
 
 ## Quick Start: set up a new computer from one you own
 
 The phone is the bridge (`core/quickstart.ts`). The new computer shows a QR with its one-time X25519 key, a secret and a
 relay rendezvous id, all after `#`. The owner's phone asks a computer it owns to send. That computer's core seals the
 bundle to the new computer's key mixed with the secret, and the new computer applies it with the same setup functions
-as the wizard. The relay sees only ciphertext.
+as the wizard. The relay sees only ciphertext. Quick Start needs a relay: with none set, `start` and `send` answer `409` with the no-relay sentence and make no request.
 
 | Request | Does |
 |---|---|

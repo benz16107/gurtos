@@ -27,7 +27,7 @@ Replay and setup from another computer ([release notes](release/notes/v0.2.0-pre
   that skips Droid's second look): [`tracks/attacks/SCOREBOARD.md`](tracks/attacks/SCOREBOARD.md).
 - A first threat model on the docs site: [gurtos.com/docs/security/threat-model](https://gurtos.com/docs/security/threat-model/).
 - A relay for remote access and phone push that anyone can run with one command ([`relay/`](relay/),
-  [`docs/self-host.md`](docs/self-host.md)). Our hosted relay at `box.gurtos.com` is offline.
+  [`docs/self-host.md`](docs/self-host.md)). The hosted relay at `box.gurtos.com` is offline, and nothing defaults to it: with no relay set, remote access and push say so at once.
 
 ## Before 1.0
 

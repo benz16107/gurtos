@@ -5,7 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import test from 'node:test';
-import { DOMAIN, Limit, SELF, api, apnsTarget, load, nameProblem, plugin, pushTargetProblem, vapidHeader, type ApnsSend } from './server.ts';
+// The relay has no default domain; set one before the server module reads it.
+process.env.RELAY_DOMAIN = 'relay.example.com';
+const { DOMAIN, Limit, SELF, api, apnsTarget, load, nameProblem, plugin, pushTargetProblem, vapidHeader } = await import('./server.ts');
+import type { ApnsSend } from './server.ts';
 
 const fresh = () => load(fs.mkdtempSync(path.join(os.tmpdir(), 'relay-')));
 const u = (p: string) => new URL(p, 'http://x');

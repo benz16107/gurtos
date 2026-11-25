@@ -81,13 +81,13 @@ Changes made by hand inside a running system slot are lost at the next update. T
 
 ## Update a box installed on Ubuntu
 
-A box installed with `core/install.sh` is a service on a normal Ubuntu system. To update it, get a newer checkout and run the install script again:
+A box installed with `install.sh` is a service on a normal Ubuntu system. To update it, run the install command again:
 
 ```sh
-sudo core/install.sh
+curl -fsSL https://gurtos.com/install.sh | sh
 ```
 
-It copies the checkout to `/opt/box`, installs dependencies and restarts the service. Tasks resume after the restart. There is no automatic rollback here. To go back, check out the previous version and run the script again. Ubuntu's own packages update the usual way.
+It updates `/opt/gurtos` to the latest `main`, copies it to `/opt/box`, installs dependencies and restarts the service. Tasks resume after the restart. From a clone, pull and run `./install.sh` instead. There is no automatic rollback here. To go back, run it with `GURTOS_REF` set to an older tag, or check out the previous version in your clone and run `./install.sh` again. Ubuntu's own packages update the usual way.
 
 ## Limits
 

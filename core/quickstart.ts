@@ -137,6 +137,7 @@ export class Target {
   }
 
   start(name: string) {
+    void this.deps.relay; // the box's getter throws the no-relay sentence before any state changes
     this.abort?.abort();
     const { privateKey, pk } = keyPair();
     Object.assign(this, { privateKey, pk, rv: randomBytes(16).toString('base64url'), s: randomBytes(16).toString('base64url'), state: 'waiting', steps: [], error: undefined, until: Date.now() + 10 * 60_000 });

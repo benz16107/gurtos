@@ -32,8 +32,8 @@ enum Relay {
   static let sameWiFi = "You can still pair on the same Wi-Fi as the computer."
   static let byHand = "Set the new computer up on its own screen instead."
 
-  static func down(_ detail: String = "", advice: String = sameWiFi) -> BoxError {
-    BoxError(status: 0, message: "Couldn't reach the GurtOS relay (\(GurtConfig.relayHost))\(detail). It may be offline. \(advice)")
+  static func down(_ detail: String = "", advice: String = sameWiFi, host: String? = GurtConfig.relayHost) -> BoxError {
+    BoxError(status: 0, message: "Couldn't reach the relay (\(host ?? "none set"))\(detail). It may be offline. \(advice)")
   }
 
   static func object(_ d: Data) -> [String: Any] { ((try? JSONSerialization.jsonObject(with: d)) as? [String: Any]) ?? [:] }
@@ -41,7 +41,8 @@ enum Relay {
   /** One relay request. A connection failure becomes "the relay is down", or "this device is offline". */
   static func send(_ request: URLRequest, _ session: URLSession, advice: String = sameWiFi) async throws -> (Data, URLResponse) {
     do { return try await session.data(for: request) } catch let e as URLError where e.code != .cancelled {
-      throw Network.offline.contains(e.code) ? Network.explain(e, host: GurtConfig.relayHost) : down(advice: advice)
+      let host = request.url?.host ?? GurtConfig.relayHost
+      throw Network.offline.contains(e.code) ? Network.explain(e, host: host ?? "the relay") : down(advice: advice, host: host)
     }
   }
 

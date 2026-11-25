@@ -136,14 +136,14 @@ async function steps(d: DemoKit, send: (h: Record<string, string>, m: string, p:
   const auditorReads = await owen('GET', '/api/audit');
   d.check(auditorAnswer.status === 403 && auditorTask.status === 403 && auditorReads.status === 200, 'the auditor reads the audit and can change nothing: answering and starting a task are refused');
 
-  // An agent on the box answering: a helper service (it runs as nobody, like the ASI:One agent) that says it is Rosa.
+  // An agent on the box answering: a helper service running as another account (nobody) that says it is Rosa.
   const port = fs.readFileSync(path.join(d.home, 'api.port'), 'utf8').trim();
   const py = `import json,urllib.request as u
 r=u.Request('http://127.0.0.1:${port}/api/approvals/${encodeURIComponent(aBig.id)}',data=b'{"approved":true,"by":"helper agent"}',headers={'content-type':'application/json','x-box-person':'rosa'},method='POST')
 try: print(u.urlopen(r).status)
 except Exception as e: print(e.code, json.loads(e.read())['error'])`;
   const agent = spawnSync('runuser', ['-u', 'nobody', '--', 'python3', '-c', py], { encoding: 'utf8' });
-  d.check(/^403 Only a person can answer/.test(agent.stdout), `agent approving agent refused: a helper agent on the box answering as "rosa" gets "${agent.stdout.trim().slice(4)}"`);
+  d.check(/^401 pair this phone/.test(agent.stdout), `agent approving agent refused: a helper agent on the box answering as "rosa" is not this computer's screen and gets "${agent.stdout.trim().slice(4)}"`);
   const unsigned = await screen('POST', `/api/approvals/${encodeURIComponent(aBig.id)}`, { approved: true, by: 'box screen' });
   d.check(unsigned.status === 403, 'the box\'s screen answers only once it says which person is answering');
   const still = ok(await screen('GET', '/api/approvals?state=pending'), 'approvals') as Approval[];

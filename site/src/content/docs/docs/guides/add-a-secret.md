@@ -34,7 +34,8 @@ cannot be checked until its first task.
 
 ## With the API
 
-Only the owner may set keys: a request from the box's own machine, or from a phone paired as the owner. A name starts
+Only the owner may set keys: a request from the box's own machine by root, the Personal owner or a member of the `gurtos` group, or from
+a phone paired as the owner. A name starts
 with a capital letter, then has capital letters, digits and underscores, 2 to 64 characters in all. A value is one
 line of at most 8,192 characters.
 

@@ -104,7 +104,7 @@ def remote_view():
 
 def relay_up(host):
     """Whether the relay answers (GET /v1/status). It is the only way a phone reaches this computer from another
-    network, and the hosted relay can be offline: then GurtOS says so instead of showing a code that cannot work."""
+    network, and it can be offline or not set up: then GurtOS says so instead of showing a code that cannot work."""
     if not host:
         return False
     try:
@@ -114,17 +114,18 @@ def relay_up(host):
         return False
 
 
-HOSTED_RELAY = 'box.gurtos.com'  # the relay app.gurtos.com reaches (portal/src/relay.ts, RELAY)
+# What a person sees when remote access needs a relay and none is set (same words as core/remote.ts, NO_RELAY).
+NO_RELAY = ('To reach this computer from anywhere, run your own relay (gurtos.com/docs/guides/self-host/) '
+            'and add its address in Settings, or use a private network such as Tailscale.')
 
 
 def pair_link(code, relay_ok):
-    """The link a pairing QR carries, by the portal's rule (portal/src/relay.ts, pairLink): the hosted app only for a
-    computer on the hosted relay, or during setup while the relay answers; else the computer's own pairing page."""
+    """The link a pairing QR carries, by the portal's rule (portal/src/relay.ts, pairLink): the app's link only during
+    setup while the relay answers; else the computer's own pairing page."""
     url, own = code.get('url') or '', code.get('boxUrl')
     meet = re.search(r'[#&]rv=', url)
     named = re.search(r'[?&]box=([^&#]+)', url)
-    host = urllib.parse.unquote(named[1]) if named else ''
-    if (host.endswith('.' + HOSTED_RELAY) and re.fullmatch(r'[a-z0-9-]{3,30}', host[:-len(HOSTED_RELAY) - 1])) or (meet and relay_ok):
+    if meet and relay_ok:
         return url
     if own:
         return own

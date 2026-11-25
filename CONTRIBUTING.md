@@ -64,8 +64,9 @@ BOX_SHELL='ssh my-vm' DEMO_ONLY=example ./demo     # one app's step (the folder 
 To name your VMs once, put lines like `myvm=ssh my-vm` in `~/.config/gurtos/machines` (not in the repository).
 Then `./demo myvm` uses that line, and a line named `default` makes plain `./demo` use it.
 
-To keep a box running on the VM, `sudo core/install.sh` there installs this checkout as the box service in
-`/opt/box`, with its API on `127.0.0.1:7700`. Put keys only in the VM's `/etc/box/vault.env` (root, mode 0600,
+To keep a box running on the VM, `./install.sh` there installs this checkout as the box service in `/opt/box`, with
+its API on `127.0.0.1:7700`, and adds you to the `gurtos` group, whose members (and root) act as the box's own
+screen from the VM. `./install.sh --uninstall` removes it. Put keys only in the VM's `/etc/box/vault.env` (root, mode 0600,
 `NAME=value` lines), never in the repository. To work on the portal against a live box, see
 [portal/README.md](portal/README.md).
 

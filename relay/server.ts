@@ -1,12 +1,12 @@
 // The GurtOS relay. One small service beside frps on the relay machine:
-//   - names: a box enrolls a name (rosa -> rosa.box.gurtos.com) and gets a secret only it holds
+//   - names: a box enrolls a name (rosa -> rosa.relay.example.com) and gets a secret only it holds
 //   - the frps plugin: frps asks it before a box logs in or opens a route, and it checks that box's secret
 //   - the push gateway: a box hands it a push it already encrypted for the phone; the gateway signs it with the
 //     app's VAPID key and forwards it to the phone's push service, or to APNs for the native Apple apps. It never
 //     sees what the push says.
 // It never terminates a box's TLS: frps routes those connections by SNI, as bytes.
 //   node --experimental-strip-types relay/server.ts
-// Env: RELAY_STATE (default /var/lib/gurtos-relay), RELAY_DOMAIN (default box.gurtos.com),
+// Env: RELAY_STATE (default /var/lib/gurtos-relay), RELAY_DOMAIN (required: the domain boxes get names under),
 //      RELAY_PLUGIN_PORT (7400), RELAY_API_PORT (7401), RELAY_TUNNEL_PORT (7000, announced to boxes),
 //      RELAY_CONTACT (an https: or mailto: address push services can reach the operator at; default this relay's address),
 //      RELAY_APNS_TOPICS (comma separated bundle ids the APNs gateway sends to; default the GurtOS apps).
@@ -16,9 +16,10 @@ import http from 'node:http';
 import http2 from 'node:http2';
 import path from 'node:path';
 
-export const DOMAIN = process.env.RELAY_DOMAIN ?? 'box.gurtos.com';
-/** The VAPID `sub` claim: where a push service can reach the operator. Ours for box.gurtos.com, else this relay's own address. */
-const CONTACT = process.env.RELAY_CONTACT ?? (DOMAIN === 'box.gurtos.com' ? 'https://gurtos.com' : `https://${DOMAIN}`);
+/** No default: there is no hosted relay to fall back to. Empty here only so tests can import this file; start-up refuses. */
+export const DOMAIN = process.env.RELAY_DOMAIN ?? '';
+/** The VAPID `sub` claim: where a push service can reach the operator. */
+const CONTACT = process.env.RELAY_CONTACT ?? `https://${DOMAIN}`;
 const STATE = process.env.RELAY_STATE ?? '/var/lib/gurtos-relay';
 const TUNNEL_PORT = Number(process.env.RELAY_TUNNEL_PORT ?? 7000);
 /** A name nobody has logged in with for this long is free again (a box that was wiped never released it). */
@@ -511,6 +512,10 @@ export function serve(r: Relay, pluginPort = Number(process.env.RELAY_PLUGIN_POR
 }
 
 if (import.meta.main) {
+  if (!DOMAIN) {
+    console.error('The relay needs RELAY_DOMAIN, the domain your boxes get names under, like relay.example.com. See relay/README.md.');
+    process.exit(2);
+  }
   const r = load();
   serve(r);
   console.log(`relay for *.${DOMAIN}: ${Object.keys(r.names.all).length} names, push key ${r.vapid.publicKey.slice(0, 12)}...`);

@@ -75,8 +75,8 @@ export default defineConfig({
         {
           label: 'Get started',
           items: [
-            'docs/get-started/install-server',
             'docs/get-started/install-on-ubuntu',
+            'docs/get-started/install-server',
             'docs/get-started/first-boot',
             'docs/get-started/install-personal',
             'docs/get-started/first-task',

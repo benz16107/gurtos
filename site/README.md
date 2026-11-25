@@ -21,7 +21,7 @@ npm run check     # after a build: every internal link resolves, and nothing pri
 
 ## Deploy
 
-The site is static. `vercel.json` adds trailing slashes, long-lived caching for built assets, redirects from the old docs paths, and `/install` to the Ubuntu install script on GitHub (`tracks/anthropic/install.sh`). The www.gurtos.com to gurtos.com redirect is set on the project's domain (`vercel api /v9/projects/gurtos-docs/domains/www.gurtos.com -X PATCH -F redirect=gurtos.com -F redirectStatusCode=308`). Deploy the
+The site is static. `vercel.json` adds trailing slashes, long-lived caching for built assets, redirects from the old docs paths, and `/install` and `/install.sh` to the install script on GitHub (`install.sh` at the top of the repository). The www.gurtos.com to gurtos.com redirect is set on the project's domain (`vercel api /v9/projects/gurtos-docs/domains/www.gurtos.com -X PATCH -F redirect=gurtos.com -F redirectStatusCode=308`). Deploy the
 built `dist/` with that file from a folder outside the git checkout, so Vercel does not connect the repository:
 
 ```sh

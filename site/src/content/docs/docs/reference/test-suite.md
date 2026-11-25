@@ -51,7 +51,7 @@ DEMO_LIVE=find ./demo my-vm           # also make an app's paid or slow live cal
 
 Before a run, the suite prints how much of Factory's 5-hour and weekly limits is used. It turns real Droid off for that run when the 5-hour limit is 90% used, unless `DEMO_LIVE_DROID_FORCE=1` reaches the run. The shipped command line passes only `DEMO_LIVE`, `DEMO_ONLY` and `BOX_REVIEW`, so that variable works only with `./demo --here` started as root.
 
-`DEMO_LIVE=remote` runs the remote-access step against a real relay at `BOX_RELAY`, which defaults to the hosted relay at `box.gurtos.com`. That relay is not running during the preview. Leave `remote` out, or point `BOX_RELAY` at a relay you run (see [Self-host](/docs/guides/self-host/)). Like `DEMO_LIVE_DROID_FORCE`, `BOX_RELAY` reaches the run only with `./demo --here` started as root.
+`DEMO_LIVE=remote` runs the remote-access step against a real relay at `BOX_RELAY`, which has no default: the hosted relay is offline. Leave `remote` out, or point `BOX_RELAY` at a relay you run (see [Self-host](/docs/guides/self-host/)). With `remote` and no `BOX_RELAY`, the step says so and stops. Like `DEMO_LIVE_DROID_FORCE`, `BOX_RELAY` reaches the run only with `./demo --here` started as root.
 
 ## What it checks
 

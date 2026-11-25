@@ -72,7 +72,7 @@ export default async (d: DemoKit) => {
   // Push: an APNs endpoint on the relay, with keys the app made. The box encrypts for them (core/push.ts).
   const keys = createECDH('prime256v1');
   keys.generateKeys();
-  const sub = { endpoint: `https://box.gurtos.com/v1/apns/com.benzhou.gurtos/sandbox/${'ab'.repeat(32)}`, keys: { p256dh: keys.getPublicKey().toString('base64url'), auth: randomBytes(16).toString('base64url') } };
+  const sub = { endpoint: `https://relay.example.com/v1/apns/com.benzhou.gurtos/sandbox/${'ab'.repeat(32)}`, keys: { p256dh: keys.getPublicKey().toString('base64url'), auth: randomBytes(16).toString('base64url') } };
   const put = await phone('PUT', '/push', { subscription: sub, key: randomBytes(32).toString('base64url') });
   const got = await phone<{ subscribed: boolean }>('GET', '/push');
   d.check(put.status === 200 && got.json.subscribed, "the box takes the app's APNs subscription as it takes a web one");
