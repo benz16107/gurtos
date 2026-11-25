@@ -147,9 +147,11 @@ export const WORKERS: Record<string, WorkerDef> = {
           '[mcp_servers.box]',
           `command = ${q(cmd)}`,
           `args = ${q(args)}`,
+          'tool_timeout_sec = 86400', // a call waits for the owner's OK (BOX_MCP_WAIT)
           '',
           '[mcp_servers.box.env]',
           `BOX_SOCKET = ${q(o.socket)}`,
+          'BOX_MCP_WAIT = "1"',
           '',
         ].join('\n'),
       };
@@ -203,7 +205,8 @@ function hook(event: 'pre' | 'post') {
 /** The box MCP server (workers/mcp.ts) as an agent starts it: the task's tools and box_ask. */
 export const boxMcp = (socket: string) => {
   const [command, ...args] = node('./mcp.ts');
-  return { command, args, env: { BOX_SOCKET: socket } };
+  // A call waits for the owner's OK (BOX_MCP_WAIT), and Claude Code lets it wait as long as a risky command's hook.
+  return { command, args, env: { BOX_SOCKET: socket, BOX_MCP_WAIT: '1' }, timeout: 86_400_000 };
 };
 
 /** Whether this agent's tasks can use this upstream now: it is set up, and speaks a format the agent sends. */

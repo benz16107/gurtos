@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_SETTINGS, applyPatch } from './config.ts';
 import { BOX_PLACEHOLDER } from './upstreams.ts';
-import { AGENTS, WORKERS, canUse, plan, splitModel } from './workers/index.ts';
+import { AGENTS, WORKERS, boxMcp, canUse, plan, splitModel } from './workers/index.ts';
 import type { WorkerCtx } from './workers/index.ts';
 
 const ctx = (o: Partial<WorkerCtx>): WorkerCtx => ({ upstream: 'anthropic', wire: 'anthropic', model: 'claude-sonnet-5-5', base: (u) => `http://127.0.0.1:8888/up/${u}`, home: '/var/lib/box/tasks/t1/home', socket: '/var/lib/box/tasks/t1/broker.sock', caPem: '/var/lib/box/relay-ca.pem', proxy: 'http://127.0.0.1:8888', ...o });
@@ -33,6 +33,8 @@ test('Claude Code is pointed at the proxy in its environment and in its own sett
   assert.equal(settings.hooks.PreToolUse[0].matcher, 'Bash');
   assert.match(settings.hooks.PreToolUse[0].hooks[0].command, /workers\/hook\.ts' 'pre'$/);
   assert.match(settings.hooks.PostToolUse[0].hooks[0].command, /workers\/hook\.ts' 'post'$/);
+  // Its box tools wait for the owner's OK, as long as the hook may.
+  assert.deepEqual([boxMcp('/s').env.BOX_MCP_WAIT, boxMcp('/s').timeout], ['1', 86_400_000]);
   // A local model does the small background jobs too.
   const local = WORKERS.claude.env(ctx({ upstream: 'ollama', model: 'qwen3' }));
   assert.deepEqual([local.ANTHROPIC_BASE_URL, local.ANTHROPIC_DEFAULT_HAIKU_MODEL, local.BOX_MODEL], ['http://127.0.0.1:8888/up/ollama', 'qwen3', 'qwen3']);
@@ -44,6 +46,8 @@ test("Codex gets a config.toml with the proxy as its provider, the Responses for
   const toml = WORKERS.codex.files!(o)['.codex/config.toml'];
   for (const line of ['model = "gpt-x"', 'model_provider = "box"', 'web_search = "disabled"', 'base_url = "http://127.0.0.1:8888/up/openai/v1"', 'env_key = "OPENAI_API_KEY"', 'wire_api = "responses"', '[mcp_servers.box]', 'BOX_SOCKET = "/var/lib/box/tasks/t1/broker.sock"']) assert.ok(toml.split('\n').includes(line), line);
   assert.match(toml, /args = \[.*workers\/mcp\.ts"\]/);
+  // A box tool call waits for the owner's OK, past Codex's default 300 s.
+  for (const line of ['tool_timeout_sec = 86400', 'BOX_MCP_WAIT = "1"']) assert.ok(toml.split('\n').includes(line), line);
   assert.ok(!WORKERS.codex.files!(ctx({ upstream: 'openai', wire: 'openai', model: undefined }))['.codex/config.toml'].includes('model ='), "no model named: Codex's own default");
 });
 

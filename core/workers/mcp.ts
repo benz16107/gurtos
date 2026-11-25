@@ -11,6 +11,15 @@ const boxName = (name: string) => name.replaceAll('__', '.');
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0, 12);
 // Same tool and input again counts up, so a resumed session that repeats a call gets the logged result.
 const seen = new Map<string, number>();
+// Claude Code and Codex end the task when told to call again later, so for them (BOX_MCP_WAIT) a call waits for the
+// owner's answer, as the hook does. Droid cuts a tool call off after ~3 minutes, so it gets 'pending' and calls again.
+const wait = !!process.env.BOX_MCP_WAIT;
+async function broker(path: string, body: object) {
+  let r;
+  do r = await call(sock, 'POST', path, body);
+  while (wait && r.pending);
+  return r;
+}
 
 const ask = {
   name: 'box_ask',
@@ -31,14 +40,14 @@ async function handle(method: string, params: any) {
     case 'tools/call': {
       const input = params.arguments ?? {};
       if (params.name === 'box_ask') {
-        const r = await call(sock, 'POST', '/ask', { key: `mcp.ask.${hash(input.question)}`, question: String(input.question) });
+        const r = await broker('/ask', { key: `mcp.ask.${hash(input.question)}`, question: String(input.question) });
         if (r.pending) return { content: [{ type: 'text', text: 'Waiting for the box owner to answer. Call box_ask again with the same question to check.' }] };
         return { content: [{ type: 'text', text: r.approved ? 'approved' : 'not approved' }] };
       }
       const tool = boxName(params.name);
       const id = `${tool}.${hash(input)}`;
       seen.set(id, (seen.get(id) ?? 0) + 1);
-      const r = await call(sock, 'POST', '/call', { key: `mcp.${id}.${seen.get(id)}`, tool, input });
+      const r = await broker('/call', { key: `mcp.${id}.${seen.get(id)}`, tool, input });
       // 'pending' means an approval is still open: let Droid keep working and call again, not treat it as a failure.
       if (r.pending) return { content: [{ type: 'text', text: String(r.error) }] };
       return { content: [{ type: 'text', text: JSON.stringify(r.ok ? r.output : r.error) }], isError: !r.ok };
