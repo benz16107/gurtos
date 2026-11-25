@@ -1,7 +1,7 @@
-# Only the GitHub Actions CI uses, once a month: they are pinned to commits, and an old pin breaks quietly when GitHub
-# retires its runtime. npm packages are not here on purpose: the six lockfiles (root, portal, site, showcase and two
-# design and app folders) would bring a steady stream of version bumps, and each one needs the VM merge gate, which CI cannot run.
-# Security fixes for npm packages come from Dependabot alerts in the repository's settings instead.
+# Dependency updates: GitHub Actions monthly (they are pinned to commits, and an old pin breaks quietly when GitHub
+# retires its runtime), npm weekly in the three lockfiles. Minor and patch updates arrive as one pull request per
+# folder; a major update is its own pull request. Each runtime change still needs the VM merge gate (./demo), which
+# CI cannot run, so a maintainer runs it before merging.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -11,3 +11,24 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /portal
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

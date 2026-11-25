@@ -92,6 +92,7 @@ git commit -s -m "Say what changed"      # adds: Signed-off-by: Your Name <you@e
 The name and address come from `git config user.name` and `user.email`. If you do not want your email address in a
 public repository, use the private address GitHub gives you (`<id>+<name>@users.noreply.github.com`, in your email
 settings). To sign off commits you already made: `git rebase --signoff origin/main`, then push.
+A check on every pull request fails when a commit has no `Signed-off-by` line.
 
 ## Where things go
 

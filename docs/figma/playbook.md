@@ -9,7 +9,6 @@ Community file.
 - A Figma file you can edit, and Figma's MCP server connected to your agent (Claude Code here).
 - A repo the agent can write to. Designs leave Figma as PNGs plus a README per set, with node IDs, so code threads
   build from them.
-- A stage log (`docs/stagelog.md`): one line per step with the Figma tool, the real minutes and an honest rating.
 
 ## The loop, step by step
 

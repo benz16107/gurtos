@@ -3,6 +3,9 @@ contact_links:
   - name: Report a security problem (private)
     url: https://github.com/benz16107/gurtos/security/advisories/new
     about: Do not open a public issue for a vulnerability. Report it privately here. See SECURITY.md.
-  - name: Ask a question or read the docs
+  - name: Ask a question or share an idea
+    url: https://github.com/benz16107/gurtos/discussions
+    about: Questions, ideas and show and tell. Use an issue only for a bug or a planned feature.
+  - name: Read the docs
     url: https://gurtos.com/docs/
     about: Install, setup and how GurtOS works.
