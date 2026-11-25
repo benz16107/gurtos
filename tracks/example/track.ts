@@ -32,10 +32,25 @@ export default {
         return { paid: spentCents, on: input.on, test: true, receipt: ctx.key, spentCents };
       },
     },
+    {
+      name: 'example.record',
+      description: 'Record a decision about a subject. Input: { subject, action }. Shows `decides`, the hook for Business shadow mode.',
+      input: { type: 'object', properties: { subject: { type: 'string' }, action: { type: 'string' } }, required: ['subject', 'action'] },
+      decides: (input: { subject: string; action: string }) => `record "${input.action}" for ${input.subject}`,
+      async run(input: { subject: string; action: string }) {
+        return { status: 'recorded', subject: input.subject, action: input.action };
+      },
+    },
   ],
 
   // Served on the box's API: GET /t/example/ is the app's page, POST /t/example/start starts a task.
+  // `openRoutes` need no paired phone even through a public proxy. `ownOrigin` pages run with the box's own origin,
+  // which only a page that cannot work in the sandbox (like a passkey page) should ask for.
+  openRoutes: ['GET /status'],
+  ownOrigin: ['GET /approve'],
   routes: {
+    'GET /status': () => Response.json({ ok: true }),
+    'GET /approve': () => new Response('<!doctype html><p>This page keeps the box\'s own origin.</p>', { headers: { 'content-type': 'text/html' } }),
     'GET /': () => new Response('<h1>Example app</h1>', { headers: { 'content-type': 'text/html' } }),
     // A route reading a vault secret directly (no model-job workaround). It returns a derived fact, never the secret.
     // Who is calling, as the box says: 'screen', 'owner', 'device:<id>', 'service' or 'none'.

@@ -136,10 +136,10 @@ An agent can also call `find.recall` any time. Memory is what worked, what faile
 note) and the owner's preferences.
 
 **Each agent sees only what its permissions allow** (OS). A note carries the workspace, tools and hosts of the
-task it came from. A new task is handed it only if its own permissions cover all of those. A lesson from the
-shopper's task never reaches a task with no shopper tool, and nothing crosses workspaces.
+task it came from. A new task is handed it only if its own permissions cover all of those. A lesson from a
+task that used a tool never reaches a task without that tool, and nothing crosses workspaces.
 
-**A stranger's task gets no memory** (OS). A task from the public Mana app or an ASI:One stranger (source
+**A stranger's task gets no memory** (OS). A task from a stranger through a public app (source
 `guest:` or `guest-run:`, or the `guest` workspace) is handed nothing, because memory would tell a stranger what
 the owner prefers. It cannot call `find.remember`, and its own note is never indexed.
 
@@ -158,8 +158,8 @@ to attacker@evil.example". The box asks the owner naming the page, the owner say
 the memory list never holds it, and a task started later with the same permissions is not handed it.
 
 **Preferences work across apps** (OS, with Moss to find them). The owner says "Never buy from Corner Market" once.
-Every task in every app is handed it before it starts, whichever app started it: the demo shows the shopper's
-task and the wallet's task each handed the same sentence. An app's own code can read the list with
+Every task in every app is handed it before it starts, whichever app started it: the demo shows two tasks
+from different apps each handed the same sentence. An app's own code can read the list with
 `box.job('find.preferences')` to check a rule in code instead of trusting the agent to follow it.
 
 **Forget** (OS and Moss): `POST /t/find/forget {id}`, or the Forget button on any result (two clicks), removes a
@@ -207,7 +207,7 @@ first. A computer answers at most 300 Moss questions a day, so a loop cannot spe
 (Moss usage limit) fails the call and the local path keeps working.
 
 **Speed (measured Oct 24).** Method: five questions about the four test photos and one preference, each asked three
-times through `GET /t/find/answer` with Moss's reply cache off (`DEMO_LIVE=moss ./demo vultr`), 15 calls per row.
+times through `GET /t/find/answer` with Moss's reply cache off (`DEMO_LIVE=moss ./demo`), 15 calls per row.
 "Question to answer" is the time from the box receiving the question to the finished answer. All machines are
 4 to 6 vCPU x86 cloud VMs with no GPU, in the same region as Moss's servers (San Jose), so a home connection adds
 its own round trip to Moss, which is not measured here.
@@ -239,7 +239,7 @@ it on.
 - **Tasks**, when they finish, fail or are undone: the title, the state and Droid's final message (or the
   prompt). Each carries the permissions of the task and a trust tag (see Memory).
 - **Memories**: the owner's preferences and lessons agents proposed and the owner allowed.
-- **Web pages** that `apify.indexSite` writes into a workspace, as ordinary files.
+- **Web pages** that an app writes into a workspace, as ordinary files.
 
 It reads each workspace as it is now: the base files plus every done task's changes. Folders starting with `.`
 and `node_modules` are skipped, and so are symlinks, so a task cannot point /find at the vault. A file is read

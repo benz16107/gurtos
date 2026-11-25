@@ -99,7 +99,7 @@ async function startBox() {
   box = spawn(process.execPath, [...process.execArgv, new URL('./box.ts', import.meta.url).pathname], {
     detached: true,
     stdio: ['ignore', out, out],
-    env: { ...process.env, BOX_HOME: HOME, BOX_PORT: 'auto', BOX_VAULT: path.join(HOME, 'vault.env'), BOX_STDB_DB: DB, BOX_PROXY_PORT: 'auto', BOX_SETUP_PORT: 'auto', BOX_APPROVAL_WAIT_MS: String(WINDOW), BOX_OWNER: 'owner', BOX_NO_DROID: LIVE_DROID ? '' : '1', BOX_HOSTS: JSON.stringify({ 'shop.demo': '127.0.0.1', 'meta.demo': '169.254.169.254' }), BOX_DEMO: '1', BOX_ID: 'demo-box', BOX_NAME: 'Demo box', BOX_PEERS: JSON.stringify([{ id: 'vultr', name: 'Vultr box', stdb: 'box' }]) },
+    env: { ...process.env, BOX_HOME: HOME, BOX_PORT: 'auto', BOX_VAULT: path.join(HOME, 'vault.env'), BOX_STDB_DB: DB, BOX_PROXY_PORT: 'auto', BOX_SETUP_PORT: 'auto', BOX_APPROVAL_WAIT_MS: String(WINDOW), BOX_OWNER: 'owner', BOX_NO_DROID: LIVE_DROID ? '' : '1', BOX_HOSTS: JSON.stringify({ 'shop.demo': '127.0.0.1', 'meta.demo': '169.254.169.254' }), BOX_DEMO: '1', BOX_ID: 'demo-box', BOX_NAME: 'Demo box', BOX_PEERS: JSON.stringify([{ id: 'second', name: 'Second box', stdb: 'box' }]) },
   });
   for (let i = 0; i < 300; i++) {
     if (await api('GET', '/health').catch(() => undefined)) {
@@ -119,7 +119,7 @@ async function waitFor<T>(what: string, fn: () => Promise<T | undefined>, ms = 2
   throw new Error(`timed out waiting for ${what}`);
 }
 
-/** Follow the action log over SSE the way Elastic or Jira would, collecting events until stopAt or a timeout. */
+/** Follow the action log over SSE the way an outside reader would, collecting events until stopAt or a timeout. */
 function streamLog(after: number, opts: { task?: string; stopAt?: (e: LogEvent) => boolean; ms?: number } = {}): Promise<LogEvent[]> {
   return new Promise((resolve, reject) => {
     const qs = new URLSearchParams({ after: String(after) });
@@ -324,7 +324,7 @@ await moment(
 
 // ---------- the action log, followed live ----------
 
-await moment('action log: a live stream for Elastic and Jira', async () => {
+await moment('action log: a live stream for outside readers', async () => {
   const after = (await api<LogEvent[]>('GET', '/log')).length;
   workspace('stream', {});
   const X = await api<Task>('POST', '/tasks', { title: 'Streamed', workspace: 'stream', worker: 'fake', source: 'demo', prompt: 'write s.txt yes' });
@@ -753,7 +753,7 @@ await moment('approvals survive a long wait, never duplicate, and close when the
 
 await moment('pairing and more than one box', async () => {
   const boxes = await api<{ id: string; name: string; self?: boolean }[]>('GET', '/api/boxes');
-  check(boxes[0]?.self && boxes.some((b) => b.id === 'vultr'), `the portal lists ${boxes.length} boxes from one API, including the Vultr box`);
+  check(boxes[0]?.self && boxes.some((b) => b.id === 'second'), `the portal lists ${boxes.length} boxes from one API, including the second box`);
 
   const { code } = await api<{ code: string }>('POST', '/api/pair/start');
   const paired = await api<{ token: string; device: { id: string; name: string } }>('POST', '/api/pair', { code, name: "Judge's phone" });
@@ -1042,9 +1042,8 @@ await moment('security: an outside caller gets nothing, and a folder cannot be t
   check(real.ok && fAnswered?.type === 'approval.answered' && fAnswered.by === 'box screen' && !fAnswered.approved, `a vouched connection can answer, and the log names it "${fAnswered?.type === 'approval.answered' ? fAnswered.by : '?'}", not the "Ben's iPhone" it typed`);
 
   // Routes a track marks as public or self-checked are reachable through a proxy; the rest are not.
-  const mana = await out('GET', '/t/mana/status');
-  const jira = await out('GET', '/t/jira/task?id=none');
-  check(mana.status === 200 && jira.body?.error !== 'pair this phone with this computer first' && (await out('GET', '/t/example/secret-check')).status === 401, `through a proxy, Mana's public status answers (${mana.status}) and Jira's routes reach their own secret check (${jira.status}); other track routes still need a phone`);
+  const open = await out('GET', '/t/example/status');
+  check(open.status === 200 && (await out('GET', '/t/example/secret-check')).status === 401, `through a proxy, an app's open route answers (${open.status}); its other routes still need a phone`);
 
   // Every task field is checked at the door.
   const badSpecs: Record<string, unknown>[] = [
@@ -1223,17 +1222,17 @@ await moment('security: a task cannot lower its spend, read through a link, hang
   await api('POST', `/api/approvals/${encodeURIComponent(otherAsk.id)}`, { approved: false });
   check(win.status === 200 && page.status === 200 && /sandbox allow-scripts/.test(page.csp) && !/allow-same-origin/.test(page.csp) && ownRoute.status === 200 && readsOk.status === 200 && preflight.status === 204 && preflight.acao === 'null', `an app's page is served sandboxed ("${page.csp.slice(0, 32)}..."), and its window token reaches the app's own routes and the task list`);
   check(refused.every((r) => r.status === 403) && crossAnswer.status === 403, `but not the vault, settings, pairing, another app or another window (${refused.map((r) => r.status).join(' ')}), and it answers only its own app's requests (${crossAnswer.status})`);
-  // Shopper's Face ID page is the one page listed in an app's ownOrigin (WebAuthn needs a real origin); every other page,
-  // Shopper's own app page included, stays sandboxed. The token script goes after a doctype, so no page is in quirks mode.
+  // The example app's /approve page is the one page listed in an app's ownOrigin (a passkey page needs a real origin);
+  // every other page, the example app's own page included, stays sandboxed. The token script goes after a doctype, so no page is in quirks mode.
   const get = (p: string) => new Promise<{ status: number; csp: string; body: string }>((resolve, reject) => {
     http.get({ host: '127.0.0.1', port: PORT, path: p, headers: { accept: 'text/html' } }, (r) => {
       let body = '';
       r.on('data', (c) => (body += c)).on('end', () => resolve({ status: r.statusCode ?? 0, csp: String(r.headers['content-security-policy'] ?? ''), body }));
     }).on('error', reject);
   });
-  const [approvePage, shopperPage] = await Promise.all([get('/t/shopper/approve'), get('/t/shopper/')]);
-  check(approvePage.status === 200 && !/sandbox/.test(approvePage.csp) && /sandbox allow-scripts/.test(shopperPage.csp) && /^<!doctype html><script>/i.test(approvePage.body) && /^<!doctype html><script>/i.test(shopperPage.body),
-    `Shopper's Face ID page keeps the box's own origin (CSP "${approvePage.csp}"), its app page is sandboxed, and each page starts with its doctype, then the token script`);
+  const [approvePage, examplePage] = await Promise.all([get('/t/example/approve'), get('/t/example/')]);
+  check(approvePage.status === 200 && !/sandbox/.test(approvePage.csp) && /sandbox allow-scripts/.test(examplePage.csp) && /^<!doctype html><script>/i.test(approvePage.body) && /^<!doctype html><script>/i.test(examplePage.body),
+    `the example app's own-origin page keeps the box's own origin (CSP "${approvePage.csp}"), its app page is sandboxed, and each page starts with its doctype, then the token script`);
   await api('DELETE', `/api/devices/${(await api<{ id: string; name: string }[]>('GET', '/api/devices')).find((d) => d.name === 'plain phone')!.id}`);
   check((await viaTcp('GET', '/t/example/secret-check', undefined, w)).status === 401, 'removing the phone that opened the window ends the window too');
 

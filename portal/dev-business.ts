@@ -62,11 +62,10 @@ await task('Credit analyst', 'Fraud flag on Pacific Crest Provisions', [
 
 // Shadow mode: the collections clerk's reminders are suggestions Rosa decides. She agreed with 5 of 6; one more waits.
 fs.mkdirSync(`${home}/workspaces/fogline-shadow`, { recursive: true, mode: 0o777 });
-fs.writeFileSync(`${home}/workspaces/fogline-shadow/rules.yaml`, 'authority_limit: 10000\nrules:\n  - id: COL-1\n  - id: COL-3\n', { mode: 0o644 });
 await call('PUT', '/business', { shadow: ['Collections clerk'] }, 'priya');
-const remind = (inv: string, action: string, detail: string) => `call credit-desk.collections_action ${JSON.stringify({ subject: inv, action, detail, rules: ['COL-1'] })}`;
+const remind = (inv: string, action: string, detail: string) => `call example.record ${JSON.stringify({ subject: inv, action: `${action}: ${detail}` })}`;
 const clerk = (title: string, lines: string[]) =>
-  call('POST', '/tasks', { title, seat: 'Collections clerk', worker: 'fake', workspace: 'fogline-shadow', tools: ['credit-desk.collections_action'], prompt: lines.join('\n'), source: 'credit-desk:dev' }, 'sam');
+  call('POST', '/tasks', { title, seat: 'Collections clerk', worker: 'fake', workspace: 'fogline-shadow', tools: ['example.record'], prompt: lines.join('\n'), source: 'credit-desk:dev' }, 'sam');
 const decide = async (task: string, approved: boolean) => {
   let a: { id: string } | undefined;
   for (let i = 0; i < 50 && !a; i++, await sleep(200)) a = (await call('GET', '/approvals?state=pending')).find((x: { task: string; shadow?: string }) => x.task === task && x.shadow);
