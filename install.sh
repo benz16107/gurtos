@@ -196,7 +196,8 @@ rm -rf /usr/local/bin/droid /usr/local/bin/frpc /usr/local/bin/caddy /usr/local/
 for f in /usr/local/bin/*; do
   case $(readlink "$f" 2>/dev/null) in /usr/local/lib/gurtos-node/*) rm -f "$f" ;; esac
 done
-rm -rf /usr/local/lib/gurtos-node
+rm -rf /usr/local/lib/gurtos-node /var/cache/gurtos-npm
+rmdir /root/.local/bin /root/.local/share /root/.local /root/.config 2>/dev/null || true # only the empty ones spacetime left
 groupdel gurtos 2>/dev/null || true
 ROOT
   say "GurtOS is removed."

@@ -118,6 +118,8 @@ export interface System {
   product: string;
   edition: string;
   editionName: string;
+  /** image: a GurtOS image with A/B updates. checkout: installed on Ubuntu with install.sh, updated by running it again. */
+  install?: 'image' | 'checkout';
   version: string;
   build: string;
   hostname: string;

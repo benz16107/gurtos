@@ -151,7 +151,7 @@ export const STEPS: Step[] = [
     ready: (w) => !!modelKey(w),
     skipLabel: 'Skip for now',
     summary: (w) => (modelKey(w) ? 'Model key saved. Agents can start tasks.' : "Add one key to go on. If you skip, agents can't start a task until you add a key in Settings."),
-    data: (w) => ({ worker: 'droid', via: modelKey(w) === 'ANTHROPIC_API_KEY' ? 'anthropic' : modelKey(w) === 'FACTORY_API_KEY' ? 'factory' : 'none' }),
+    data: (w) => ({ via: modelKey(w)?.split('_')[0].toLowerCase() ?? 'none' }), // anthropic, openai or factory
   },
   {
     id: 'safety',
@@ -195,7 +195,7 @@ export function SetupWizard() {
       boxName: d('name').boxName ?? b.system?.boxName ?? '',
       timezone: d('name').timezone ?? b.system?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
       autoTime: d('name').autoTime ?? true,
-      owner: d('phone').owner ?? 'phone',
+      owner: d('phone').owner ?? (b.system?.install === 'checkout' ? 'screen' : 'phone'), // installed with install.sh: the box listens on 127.0.0.1 only
     };
   });
   const [vault, setVault] = useState<Vault[]>([]);
@@ -581,6 +581,7 @@ function OwnerStep({ w }: { w: Wiz }) {
           'Pair my phone',
           <>
             <p class="t-body t-secondary">Approvals and running tasks come to your phone. It never holds a key: it can only answer.</p>
+            {box.system?.install === 'checkout' && <p class="t-caption t-secondary">Installed with the install script, {PRODUCT} answers on this machine only, so a phone can reach it once you set up Remote access in Settings.</p>}
             {w.draft.owner === 'phone' && !p.showCode && p.owner && <Paired name={p.owner.name} />}
             {w.draft.owner === 'phone' && p.showCode && (
               <div class="gos-setup-pair">
@@ -763,6 +764,16 @@ function SafetyStep({ w }: { w: Wiz }) {
 
 function UpdatesStep() {
   const sys = box.system;
+  if (sys?.install === 'checkout')
+    return (
+      <div class="gos-setup-col">
+        <Intro title="Updates">
+          {PRODUCT} was installed on this Ubuntu machine with the install script. To update it, run the same line again. It keeps your tasks, the log and your keys. Ubuntu keeps updating the rest of the system as it always has.
+        </Intro>
+        <code class="t-mono" style="overflow-wrap: anywhere">curl -fsSL https://gurtos.com/install.sh | sh</code>
+        <span class="t-caption t-secondary">{`${sys.editionName} ${sys.version}, build ${sys.build}`}</span>
+      </div>
+    );
   return (
     <div class="gos-setup-col">
       <Intro title="Updates">{PRODUCT} installs each update as a whole system, into a second copy. If the new one does not start cleanly, GurtOS goes back to the old one by itself.</Intro>
