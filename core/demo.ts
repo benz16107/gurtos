@@ -1187,6 +1187,28 @@ await moment('security: a task cannot lower its spend, read through a link, hang
   const otherPort = await viaTcp('POST', '/api/vault/STOLEN', { value: 'x' }, { origin: `http://localhost:${PORT + 1}` });
   check(rebind.status === 401 && otherPort.status === 401 && !(await api<{ name: string }[]>('GET', '/api/vault')).some((k) => k.name === 'STOLEN'), `a rebound name gets nothing (${rebind.status}), and neither does a page from another port on this machine (${otherPort.status})`);
 
+  // Another account on this machine: only root, the owner and the gurtos group act as the screen (net.ts trustedUid).
+  // Everyone else (another login, a service, a task) needs a paired token, like a phone.
+  const as = (uid: number, p: string, token?: string) =>
+    spawnSync('setpriv', [`--reuid=${uid}`, `--regid=${uid}`, '--clear-groups', 'curl', '-s', '-m', '10', '-o', '/dev/null', '-w', '%{http_code}', ...(token ? ['-H', `authorization: Bearer ${token}`] : []), `http://127.0.0.1:${PORT}${p}`], { encoding: 'utf8' }).stdout.trim();
+  const member = `gurtmate${run}`;
+  const memberUid = 2000 + Math.floor(Math.random() * 500); // a person's uid, not in the task range
+  spawnSync('groupadd', ['-f', '--system', 'gurtos']);
+  spawnSync('useradd', ['-M', '-N', '-u', String(memberUid), '-G', 'gurtos', '-s', '/usr/sbin/nologin', member]);
+  try {
+    const phone = await api<{ token: string }>('POST', '/api/pair', { code: (await api<{ code: string }>('POST', '/api/pair/start')).code, name: 'local phone' });
+    const stranger = [as(65534, '/api/tasks'), as(65534, '/api/vault')];
+    const withToken = [as(65534, '/api/tasks', phone.token), as(65534, '/api/vault', phone.token)];
+    const taskUser = as(39999, '/api/tasks');
+    const inGroup = [as(memberUid, '/api/tasks'), as(memberUid, '/api/vault')];
+    check(stranger.join() === '401,401', `another account on this machine with no token is refused (${stranger.join(', ')})`);
+    check(taskUser === '000', `a task user's connection to the API is refused by the firewall (curl got ${taskUser || 'nothing'})`);
+    check(withToken.join() === '200,403', `with a paired phone's token it reads like a phone (${withToken[0]}), and the owner's controls stay closed (${withToken[1]})`);
+    check(inGroup.join() === '200,200', `a member of the gurtos group is the owner here, with no token (${inGroup.join(', ')}), like root`);
+  } finally {
+    spawnSync('userdel', [member]);
+  }
+
   // Guessing pairing codes: five wrong ones a minute from one address, and that address alone has to wait.
   const guesses: number[] = [];
   for (let i = 0; i < 6; i++) guesses.push((await viaTcp('POST', '/api/pair', { code: `0000000${i}`, name: 'guess' }, { 'x-forwarded-for': '198.51.100.20' })).status);

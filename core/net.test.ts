@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import http from 'node:http';
+import fs from 'node:fs';
 import net from 'node:net';
-import { MAX_MODEL_BODY, Tries, allowed, uidOf, anthropicPath, destination, factoryPath, fetchesOnItsOwn, fromScreen, sourceOf, startProxy, withKey } from './net.ts';
+import os from 'node:os';
+import path from 'node:path';
+import { MAX_MODEL_BODY, Tries, allowed, trustedUid, uidOf, anthropicPath, destination, factoryPath, fetchesOnItsOwn, fromScreen, sourceOf, startProxy, withKey } from './net.ts';
 import type { Task } from './contract.ts';
 
 test('a task reaches a name on the box only on the exact host:port it was given, never a box port', async () => {
@@ -153,4 +156,36 @@ test('the owner of each loopback connection is found from /proc/net/tcp', async 
   server.close();
   assert.equal(seen.length, 200);
   assert.ok(seen.every((u) => u === process.getuid!()), 'every connection is ours');
+});
+
+test('on this machine only root, the owner and the gurtos group act as the screen; everyone else needs a token', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'accounts-'));
+  const files = { passwd: path.join(dir, 'passwd'), group: path.join(dir, 'group') };
+  fs.writeFileSync(files.passwd, ['root:x:0:0::/root:/bin/bash', 'ana:x:1000:1000::/home/ana:/bin/bash', 'sam:x:1001:1001::/home/sam:/bin/bash', 'kiosk:x:998:996::/var/lib/kiosk:/usr/sbin/nologin', 'web:x:997:995::/srv:/usr/sbin/nologin', 'nobody:x:65534:65534::/nonexistent:/usr/sbin/nologin', 'box-t1:x:30001:30001::/nonexistent:/usr/sbin/nologin', 'lead:x:1002:995::/home/lead:/bin/bash', ''].join('\n'));
+  fs.writeFileSync(files.group, ['root:x:0:', 'sudo:x:27:ana,sam', 'gurtos:x:995:sam,kiosk,box-t1', ''].join('\n'));
+  try {
+    assert.ok(trustedUid(0, null, files), 'root (sudo curl, the CLI)');
+    assert.ok(trustedUid(1000, 'ana', files), 'the Personal owner, without the group');
+    assert.ok(trustedUid(1001, null, files) && trustedUid(998, null, files), 'members of the gurtos group: the installing user, the kiosk screen');
+    assert.ok(trustedUid(997, null, files) && trustedUid(1002, null, files), 'an account whose primary group is gurtos');
+    assert.ok(!trustedUid(1000, null, files), 'a sudoer who is not the owner and not in the group (another login on this machine)');
+    assert.ok(!trustedUid(65534, null, files), 'a service running as nobody');
+    assert.ok(!trustedUid(30001, null, files) && !trustedUid(30001, 'box-t1', files), 'a task user, even put in the group or named the owner');
+    assert.ok(!trustedUid(4242, null, files) && !trustedUid(undefined, null, files), 'an unknown account, or a connection whose account was not found');
+    assert.ok(!trustedUid(1001, null, { passwd: files.passwd, group: path.join(dir, 'missing') }), 'no group file: nobody but root');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a connection over ::1 is matched to its account in /proc/net/tcp6', async (t) => {
+  const server = net.createServer();
+  const ok = await new Promise<boolean>((r) => server.once('error', () => r(false)).listen(0, '::1', () => r(true)));
+  if (!ok) return t.skip('no IPv6 loopback here');
+  const port = (server.address() as net.AddressInfo).port;
+  const seen = new Promise<number | undefined>((r) => server.once('connection', (sock) => r(uidOf(sock))));
+  const c = net.connect(port, '::1');
+  assert.equal(await seen, process.getuid!());
+  c.destroy();
+  server.close();
 });

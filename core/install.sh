@@ -19,6 +19,8 @@ rsync -a --delete --exclude node_modules --exclude screenshots \
   --exclude '*' ./ /opt/box/
 (cd /opt/box && npm ci --omit=dev --no-audit --no-fund --no-update-notifier --loglevel=error)
 [ -f /etc/box/vault.env ] || install -m 600 /dev/null /etc/box/vault.env
+# Members act as this computer's own screen from loopback, with the owner's rights (core/net.ts trustedUid).
+getent group gurtos >/dev/null || groupadd --system gurtos
 
 cat > /etc/systemd/system/box.service <<'UNIT'
 [Unit]

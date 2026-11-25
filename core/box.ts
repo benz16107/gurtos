@@ -12,7 +12,7 @@ import type { App, Approval, ApprovalRoute, Box, FullSpec, Ctx, LogEvent, LogRea
 import { DEFAULT_POLICY, amountOf, approversFor, auditRows, checkPerson, checkSeats, checkShadow, goLiveRules, holds, notifyPeople, parsePolicy, pilot, refusal, route, toCsv, whoOf, type Business, type Person } from './business.ts';
 import { DB, Live } from './live.ts';
 import { Log, apply, approvalId, canMove, doneLayers, fold, plainText, type State } from './log.ts';
-import { ANTHROPIC_PLACEHOLDER, PLACEHOLDER_KEY, Tries, closeProxy, firewall, fromScreen, logBlocked, sourceOf, stopLoggingBlocked, uidOf, relayCert, reservePort, startProxy } from './net.ts';
+import { ANTHROPIC_PLACEHOLDER, PLACEHOLDER_KEY, Tries, closeProxy, firewall, fromScreen, logBlocked, sourceOf, stopLoggingBlocked, trustedUid, uidOf, relayCert, reservePort, startProxy } from './net.ts';
 import * as sandbox from './sandbox.ts';
 import { HOME, dirs } from './sandbox.ts';
 import { MODELS, modelProblem, resolveModel } from './models.ts';
@@ -1057,8 +1057,8 @@ class Core {
 
   /**
    * The person behind a request on a Business box: the person a paired phone was paired for, or, on the box's own
-   * screen, the person it says with the `x-box-person` header (the screen is trusted, as it always was). A helper
-   * service on the box (one running as nobody or as a task user) is never a person.
+   * screen, the person it says with the `x-box-person` header (the screen is trusted, as it always was). Any other
+   * account on the box (a helper service, a task user) is not the screen, so it is never a person.
    */
   personOf(req: http.IncomingMessage): Person | undefined {
     if (!this.business.on) return undefined;
@@ -1067,7 +1067,7 @@ class Core {
     const device = this.deviceOf(req);
     if (device) return this.person(device.person);
     const said = req.headers['x-box-person'];
-    return this.isLocal(req) && !this.serviceCaller(req) && typeof said === 'string' ? this.person(said) : undefined;
+    return this.isLocal(req) && typeof said === 'string' ? this.person(said) : undefined;
   }
 
   /** Who is acting, for the log: the person, else the phone, else the box's screen; and the phone or screen it came from. */
@@ -1883,7 +1883,7 @@ class Core {
   requireOwnerChange(req: http.IncomingMessage) {
     this.requireOwner(req);
     // An owner.json that could not be read still means an owner was set: only root or the owner's phone changes it.
-    if ((this.owner || this.torn.includes('owner.json')) && req.socket.remoteAddress !== undefined && !this.deviceOf(req)?.owner) {
+    if ((this.owner || this.torn.includes('owner.json')) && !this.viaSocket.has(req.socket) && !this.deviceOf(req)?.owner) {
       throw Object.assign(new Error('the owner is already set; change it on this computer or from the owner\'s phone'), { status: 403 });
     }
   }
@@ -2268,7 +2268,7 @@ class Core {
     const qsend = p.match(/^\/quickstart\/send(?:\/([A-Za-z0-9_-]{8,20}))?$/);
     if (p === '/quickstart/start' && m === 'POST')
       act = () => {
-        if (!(this.isLocal(req) && !this.serviceCaller(req))) throw Object.assign(new Error("Quick Start starts on the new computer's own screen"), { status: 403 });
+        if (!this.isLocal(req)) throw Object.assign(new Error("Quick Start starts on the new computer's own screen"), { status: 403 });
         if (this.setup.done) throw Object.assign(new Error('Quick Start is for a new computer, during setup'), { status: 409 });
         return this.quickTargetFor().start(this.boxName());
       };
@@ -2305,46 +2305,44 @@ class Core {
     return { id, revoked: true };
   }
 
+  /** Connections to the root-only socket, marked when they arrive: a closed TCP connection has no address either. */
+  viaSocket = new WeakSet<http.IncomingMessage['socket']>();
+  /** Whether the account behind a loopback connection may act as this computer's screen (net.ts trustedUid), once per connection. */
+  trustedPeers = new WeakMap<http.IncomingMessage['socket'], boolean>();
+
   /**
-   * The request comes from the box's own screen: over the local socket, or from this machine's loopback with
-   * no proxy header. A request relayed by a reverse proxy or a tailnet serve looks local to the box, but it
-   * carries forwarding headers, so it does not count.
+   * The request comes from the box's own screen: over the root-only socket, or from this machine's loopback with
+   * no proxy header, from root, the owner's account or a member of the gurtos group. A request relayed by a reverse
+   * proxy or a tailnet serve looks local to the box, but it carries forwarding headers, so it does not count. Any
+   * other account on this machine (another login, a service, a task user) needs a paired token like a phone.
    */
   isLocal(req: http.IncomingMessage): boolean {
     const w = this.windowAs.get(req);
     if (w) return !w.device; // an app's window opened on the box's own screen, within its own app (windowGate)
+    const sock = req.socket;
+    if (this.viaSocket.has(sock)) return true;
     // A web page in a browser on this machine also arrives from loopback. Only the box's own pages count (net.ts).
-    return fromScreen(req.socket.remoteAddress, req.headers, this.apiPort, (process.env.BOX_ORIGINS ?? '').split(',').map((o) => o.trim()).filter((o) => o && o !== '*'));
+    if (!fromScreen(sock.remoteAddress ?? 'closed', req.headers, this.apiPort, (process.env.BOX_ORIGINS ?? '').split(',').map((o) => o.trim()).filter((o) => o && o !== '*'))) return false;
+    let ok = this.trustedPeers.get(sock);
+    if (ok === undefined) this.trustedPeers.set(sock, (ok = trustedUid(uidOf(sock), this.owner)));
+    return ok;
   }
 
   /**
    * Who is calling, for a track route (the x-box-caller header): 'screen' (the box's own screen), 'owner' (a phone
-   * paired as the owner), 'device:<id>' (another paired phone), 'service' (a helper on the box, like the ASI:One
-   * agent) or 'none' (an open route reached through a proxy with no token).
+   * paired as the owner), 'device:<id>' (another paired phone) or 'none' (an open route reached with no token).
    */
   callerOf(req: http.IncomingMessage): string {
     const device = this.deviceOf(req);
     if (device) return device.owner ? 'owner' : `device:${device.id}`;
-    if (this.isLocal(req)) return this.serviceCaller(req) ? 'service' : 'screen';
-    return 'none';
+    return this.isLocal(req) ? 'screen' : 'none';
   }
 
   /** The box's own screen, or a device that was paired as the owner. */
   isOwner(req: http.IncomingMessage): boolean {
     // The box's own screen is the owner, unless it says it is someone else (Business: x-box-person).
     const p = this.personOf(req);
-    return (this.isLocal(req) && !this.serviceCaller(req) && !p) || !!this.deviceOf(req)?.owner || p?.role === 'owner';
-  }
-
-  /**
-   * A loopback caller that runs as `nobody` or as a task user: a helper service on the box (the ASI:One agent
-   * runs as nobody), not the box's own screen. It may still use the API like the screen does, but never the
-   * owner's controls (vault, settings, folders, Keep), so a flaw in a helper cannot become the owner's rights.
-   */
-  serviceCaller(req: http.IncomingMessage): boolean {
-    if (req.socket.remoteAddress === undefined) return false; // the root-only socket
-    const uid = uidOf(req.socket);
-    return uid === 65534 || (uid !== undefined && uid >= 30000 && uid <= 39999);
+    return (this.isLocal(req) && !p) || !!this.deviceOf(req)?.owner || p?.role === 'owner';
   }
 
   /** Setup, settings, apps on and off, and the vault are for the owner only. */
@@ -2590,7 +2588,7 @@ class Core {
           case 'POST /setup/:id': {
             // The code is only for someone at this computer's own screen.
             if (id === 'code') {
-              if (!(this.isLocal(req) && !this.serviceCaller(req))) throw Object.assign(new Error("A setup code is shown on this computer's own screen."), { status: 403 });
+              if (!this.isLocal(req)) throw Object.assign(new Error("A setup code is shown on this computer's own screen."), { status: 403 });
               return this.openSetupChannel();
             }
             this.requireOwner(req);
@@ -2894,7 +2892,9 @@ data: ${JSON.stringify(e)}
     this.sweepUndone();
     this.watchDisk();
     for (const pump of this.readers) pump();
-    await listenSocket(this.api(), path.join(HOME, 'api.sock'));
+    const own = this.api();
+    own.on('connection', (s) => this.viaSocket.add(s));
+    await listenSocket(own, path.join(HOME, 'api.sock'));
     // BOX_PORT=auto (the demo) takes any free port and writes it to BOX_HOME/api.port.
     const want = process.env.BOX_PORT ?? '7700';
     if (want !== '0') {
