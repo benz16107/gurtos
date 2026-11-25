@@ -154,7 +154,7 @@ paths:
         computer is still downloading Droid stays `queued` and starts once Droid is there. While the agents
         are paused, every new task stays `queued`.
 
-        Defaults: `workspace` is `home`, `worker` is `droid`, `tools` are empty and `source` is `api`. A task
+        Defaults: `workspace` is `home`, `worker` is the setting `defaultAgent`, `tools` are empty and `source` is `api`. A task
         that names no `budgetCents` gets Settings `defaultBudgetCents` (100 unless changed). A task that names
         no `hosts` gets none, or Settings `defaultHosts` when `networkDefault` is `allowlist`. The workspace
         must exist and every tool must be installed. A field the box does not know is a 400 that names it.
@@ -2546,9 +2546,12 @@ components:
           description: A folder in `BOX_HOME/workspaces`. The task works on its own copy of it.
         worker:
           type: string
-          enum: [droid, fake]
-          default: droid
-          description: '`droid` is Droid with Claude. `fake` runs scripted steps with no model, for tests.'
+          enum: [droid, claude, codex, opencode, fake]
+          description: 'The agent: `droid` (Factory''s Droid), `claude` (Claude Code), `codex` (Codex CLI) or `opencode`. `fake` runs scripted steps with no model, for tests. Default: the setting `defaultAgent`.'
+        agent:
+          type: string
+          enum: [droid, claude, codex, opencode, fake]
+          description: The same as `worker`, under the name the screens use. Send one of the two.
         tools:
           type: array
           items: { type: string }
@@ -2562,7 +2565,7 @@ components:
           description: 'Hosts the task''s network may reach: `example.com` (any port), `example.com:8080` (one port) or `*.example.com` (subdomains). Never `localhost`, a loopback or link-local address, or a whole top-level domain.'
         model:
           type: string
-          description: 'Droid worker: the Claude model. `haiku` (cheap checks), `sonnet` (most work, the default), `opus` (hard tasks), or a full model id that starts with `claude-`. The task records the id it ran on.'
+          description: 'The model. `haiku`, `sonnet` or `opus`, or a full model id. A model service in front picks where it runs: `ollama/qwen3` (a local model), `custom/my-model` (your own endpoint), `openai/<id>`. Left out: the agent''s default. Droid runs Claude models only. The task records what it ran on.'
         budgetCents:
           type: integer
           minimum: 0
@@ -2918,6 +2921,10 @@ components:
         paused: { type: boolean, default: false, description: 'The kill switch. While true no task starts (new ones stay `queued`) and running ones hold before their next step, tool call or question. The box sets it itself at start when `permissions.json` cannot be read.' }
         networkDefault: { type: string, enum: [none, allowlist], default: none, description: 'With `allowlist`, a task that names no hosts gets `defaultHosts`.' }
         defaultHosts: { type: array, items: { type: string }, default: [], maxItems: 100 }
+        defaultAgent: { type: string, enum: [auto, droid, claude, codex, opencode], default: auto, description: 'The agent of a task that names none. `auto` is the first agent that has a model service set up, Droid first.' }
+        ollamaHost: { type: string, default: '', description: 'Where Ollama listens, like `http://127.0.0.1:11434`. Empty: no local model.' }
+        customBaseUrl: { type: string, default: '', description: 'Your own model endpoint (LiteLLM, a company gateway), without `/v1`. Its key, if it wants one, is `CUSTOM_API_KEY` in the vault. Empty: off.' }
+        customWire: { type: string, enum: [anthropic, openai], default: anthropic, description: The format your own endpoint speaks. }
         agentFolders: { type: array, items: { type: string }, default: [], maxItems: 50, description: 'Personal. Folders agents may be given besides the owner''s home. Never the system or the box''s own state.' }
         quietHours:
           type: object

@@ -6,5 +6,5 @@ import type { Track } from '../../core/contract.ts';
 export default {
   name: 'anthropic',
   title: 'Claude',
-  description: "The AI model every agent uses, through Factory's Droid. Needs an Anthropic or a Factory API key, which stays in the vault.",
+  description: 'The AI models your agents use. Pick the agent (Claude Code, Codex, opencode or Droid) and add a model key, which stays in the vault.',
 } satisfies Track;

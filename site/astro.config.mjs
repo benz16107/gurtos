@@ -103,6 +103,7 @@ export default defineConfig({
         {
           label: 'How-to guides',
           items: [
+            'docs/guides/choose-your-agent',
             'docs/guides/approve-from-your-phone',
             'docs/guides/undo-a-task',
             'docs/guides/keep-or-undo',

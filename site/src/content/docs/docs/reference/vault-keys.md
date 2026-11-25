@@ -46,14 +46,16 @@ Before an event reaches the action log, or a tool's result reaches a task, the b
 
 ## Model keys
 
-A box needs one of these before a Droid task can start. Without one, the task fails at once with `No model key yet. Add an Anthropic or Factory API key in Settings, Accounts & Keys, then start the task again.`
+A box needs one model service before an agent task can start: one of these keys, or a local model or your own endpoint (see [Choose your agent](/docs/guides/choose-your-agent/)). Without one, a Droid task fails at once with `No model key yet. Add an Anthropic or Factory API key in Settings, Accounts & Keys, then start the task again.`, and another agent's task with a sentence that names what it can use.
 
 | Key | Read by | For |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | The task proxy | Droid runs on your Anthropic account. Tasks hold a placeholder, and the proxy puts the real key on each request to `api.anthropic.com`. On this key the proxy refuses a call that asks Anthropic to fetch a page, an MCP server or a file by URL, and logs it as blocked. |
+| `ANTHROPIC_API_KEY` | The task proxy | Claude Code, opencode or Droid runs on your Anthropic account. Tasks hold a placeholder, and the proxy puts the real key on each request to `api.anthropic.com`. On this key the proxy refuses a call that asks Anthropic to fetch a page, an MCP server or a file by URL, and logs it as blocked. |
 | `FACTORY_API_KEY` | The task proxy, and the `factory` app (to read usage limits) | Droid runs on Factory. Tasks hold a placeholder, and the proxy puts the real key on each request to Factory. The proxy relays only the Factory paths Droid uses (models, its settings and limits, session sync and telemetry) and refuses any other with a log line. It refuses a model call that asks Factory to fetch a page, an MCP server or a file by URL for the task, as it does for an Anthropic key. |
+| `OPENAI_API_KEY` | The task proxy | Codex or opencode runs on your OpenAI account. Tried with a free call when saved, like an Anthropic key. The proxy refuses a call that asks OpenAI to search the web from its side. |
+| `CUSTOM_API_KEY` | The task proxy | Optional. The key of your own model endpoint (the setting `customBaseUrl`), sent as `x-api-key` and `Authorization: Bearer`. |
 
-Either key is enough. If both are in the vault, the box uses the Factory key.
+One is enough. For Droid, if both its keys are in the vault, the box uses the Factory key.
 
 ## Other keys the core uses
 
