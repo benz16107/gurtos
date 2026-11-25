@@ -1,15 +1,15 @@
 ---
 import { Image } from 'astro:assets';
 import Landing from '../layouts/Landing.astro';
+import Command from '../components/Command.astro';
 import PhoneFrame from '../theme/PhoneFrame.astro';
 import WatchFrame from '../theme/WatchFrame.astro';
 import DisplayFrame from '../theme/DisplayFrame.astro';
 import { NAME, REPO, LICENSE_NAME } from '../product.ts';
+import taskShot from '../assets/home/task-window.png';
 import server from '../assets/home/server-screen.png';
 import personal from '../assets/home/personal-everyday.png';
 import personalDark from '../assets/home/personal-everyday-dark.png';
-import businessDesktop from '../assets/home/business-desktop.png';
-import businessPhone from '../assets/home/business-phone.png';
 import homeLight from '../assets/home/iphone-home-light.png';
 import homeDark from '../assets/home/iphone-home-dark.png';
 import approvalLight from '../assets/home/iphone-approval-light.png';
@@ -17,177 +17,410 @@ import approvalDark from '../assets/home/iphone-approval-dark.png';
 import watch from '../assets/home/watch-small.png';
 import poster from '../assets/home/video-poster.jpg';
 
-const RELEASE = `${REPO}/releases/download/v0.2.0-preview`;
-const isos = (edition: string) => [
-  { arch: 'x86_64', label: 'Intel or AMD (x86_64)', file: `gurtos-${edition}-x86_64.iso` },
-  { arch: 'arm64', label: 'Apple silicon (arm64)', file: `gurtos-${edition}-arm64.iso` },
-];
+const INSTALL = 'curl -fsSL https://gurtos.com/install.sh | sh';
 const VIDEO = 'https://youtu.be/rREjU2ddIyo';
-const core = [
-  { label: 'Undo one task', line: 'Each task writes to its own layer over your files. Undo drops that layer and keeps every other task\'s work.', href: '/docs/concepts/workspaces-and-layers/' },
-  { label: 'Keys stay out of reach', line: 'Keys live in a root-only vault. The box makes keyed calls for the agent, so a poisoned web page has nothing to steal.', href: '/docs/concepts/vault-and-broker/' },
-  { label: 'Only the hosts you allow', line: 'A task\'s network reaches the box\'s proxy and nothing else. The proxy lets through the hosts that task lists.', href: '/docs/concepts/network-policy/' },
-  { label: 'Pause for your OK', line: 'Spending over the budget or your threshold stops and asks, on the screen or your phone. Other tasks keep running.', href: '/docs/concepts/approvals-and-budgets/' },
-  { label: 'Pull the plug', line: 'After a power cut, the box rebuilds every task from its log and carries on where it stopped.', href: '/docs/concepts/resume-after-power-loss/' },
-  { label: 'Every step logged', line: 'One append-only action log of each step, tool call, approval, cost and blocked connection.', href: '/docs/concepts/action-log/' },
+
+// Pins on the task screen, as percentages of the cropped screenshot (task-window.png is task.png cut to its window).
+const pins = [
+  { x: 67.4, y: 64.8, title: 'Its own Linux user.', text: 'box-tu34326255a, with no sudo. Every task gets a new one.' },
+  { x: 80.2, y: 12.5, title: 'Its own copy of the files.', text: 'The four files it wrote exist only in this task\'s layer.' },
+  { x: 97.9, y: 71.0, title: 'One allowed host.', text: 'The proxy lets it reach example.com and nothing else.' },
+  { x: 3.1, y: 22.0, title: 'Two attempts refused.', text: 'The page it read told it to send data to attacker.example and 1.1.1.1. Both were blocked, and it held no key to send.' },
+  { x: 3.1, y: 67.4, title: 'Written to the log.', text: 'Line 58 of log.jsonl is the refused connection. Each line carries the SHA-256 of the line before it.' },
+  { x: 33.8, y: 12.6, title: 'A $1.00 budget.', text: 'A tool call that would spend more pauses the task and asks you.' },
+  { x: 71.9, y: 4.6, title: 'Undo or replay.', text: 'Undo removes this task\'s layer and keeps every other task\'s changes. Replay steps through its log.' },
+];
+// Hovering or focusing a legend entry rings its pin. CSS only, so the screen works with scripts off.
+const pinCss = pins.map((_, i) => `.anatomy:has(.legend li:nth-child(${i + 1}):hover) .pin:nth-of-type(${i + 1})`).join(',') +
+  '{box-shadow:0 0 0 3px #141a21,0 0 0 6px #f2b544;transform:translate(-50%,-50%) scale(1.15)}';
+
+const incidents = [
+  {
+    kind: 'Deleted files',
+    cases: [
+      { when: 'July 2026', what: 'A Codex sub-agent expanded $HOME wrongly and deleted most of a founder\'s home folder on a Mac.', src: 'AI incident 1671', href: 'https://airisk.mit.edu/ai-incidents/1671-openai-gpt-5-6-sol-agent-reportedly-deleted-most-files' },
+      { when: 'Open issue', what: 'A Claude Code sub-agent on Windows ran rm -rf on the short 8.3 name of a home folder and deleted about 116 GB.', src: 'claude-code #99193', href: 'https://github.com/anthropics/claude-code/issues/99193' },
+    ],
+    fix: 'A task writes to its own copy of the files, as a user with no sudo. Undo takes its changes out. On GurtOS Personal, your real folders change only when you choose Keep.',
+  },
+  {
+    kind: 'A key sent to the wrong host',
+    cases: [
+      { when: 'CVE-2026-21852', what: 'A cloned repo\'s .claude/settings.json set ANTHROPIC_BASE_URL, and Claude Code sent requests with the API key to that host before the trust prompt. Fixed in 2.0.65.', src: 'Check Point Research', href: 'https://blog.checkpoint.com/research/check-point-researchers-expose-critical-claude-code-flaws/' },
+    ],
+    fix: 'The agent holds a placeholder, not your key, so a redirected base URL gets nothing. The box adds the real key on the way out, and the task can reach only the hosts it lists.',
+  },
+  {
+    kind: 'An agent made to steal secrets',
+    cases: [
+      { when: 'August 2025', what: 'Malicious Nx releases on npm ran claude --dangerously-skip-permissions and gemini --yolo to hunt for secrets. GitGuardian counted 2,349 credentials from 1,079 systems.', src: 'GitGuardian', href: 'https://blog.gitguardian.com/the-nx-s1ngularity-attack-inside-the-credential-leak/' },
+    ],
+    fix: 'The model key sits in a vault only root can read, not in the task\'s environment. A connection to a host the task did not list is refused and logged.',
+  },
+  {
+    kind: 'An agent open to the internet',
+    cases: [
+      { when: 'February 2026', what: 'OpenClaw\'s gateway listened on 0.0.0.0:18789 by default. SecurityScorecard counted more than 135,000 exposed addresses.', src: 'Bitdefender', href: 'https://www.bitdefender.com/en-us/blog/hotforsecurity/135k-openclaw-ai-agents-exposed-online' },
+    ],
+    fix: 'On Ubuntu the box\'s API listens on 127.0.0.1. Every request from another device needs a paired device\'s token, and the ISO\'s firewall lets the API in from private networks only.',
+  },
+];
+
+const steps = [
+  ['You start a task.', 'Say what to do, which hosts it may reach and how much it may spend. GurtOS creates a Linux user for it (box-<id>, uid 30000 to 39999, no sudo) and mounts a copy-on-write view of the files.'],
+  ['The agent runs in a locked unit.', 'Claude Code, Codex or the agent you picked runs as a systemd unit with no capabilities, a system call filter, 2 GB of memory, 512 processes and a private /tmp.'],
+  ['Its traffic goes through the proxy.', 'An nftables rule lets the task user reach the box\'s proxy and nothing else. The proxy passes the hosts the task lists, adds your API key to model calls, and refuses and logs the rest.'],
+  ['Spending waits for you.', 'A tool call above the task\'s budget or your threshold pauses the task. The request shows on the box\'s screen and your phone while other tasks keep running.'],
+  ['Every event goes into the log.', 'The box appends each event to log.jsonl and calls fsync before acting on it. After a power cut it replays the log and resumes the tasks that were running.'],
+  ['You keep it or undo it.', 'Open the task to see each file it changed. Undo removes its layer and leaves other tasks alone. On GurtOS Personal, Keep copies the changes into your folder.'],
+];
+
+const limits = [
+  'Every task shares one Linux kernel, so a kernel bug could reach every task.',
+  'The proxy checks which hosts a task reaches, not what it sends them.',
+  'The 5 GB cap on a task\'s copy is checked every 2 seconds, so a fast writer can pass it briefly.',
+  'The disk is not encrypted. Root can read the vault and rewrite the log.',
+  'Undo takes back file changes. It cannot recall a message or a payment a task already sent.',
+  'No outside security audit yet.',
+];
+
+// Only what the cited docs say, read on 2026-11-24. "Not documented" means we looked and did not find it.
+const products = ['A plain container or VM', 'Docker Sandboxes', 'NVIDIA OpenShell', 'Cloudflare OS', NAME];
+const compare: [string, string[]][] = [
+  ['Runs on', ['Your machine', 'Your machine, or Docker\'s cloud', 'Linux, DGX', 'Cloudflare\'s platform', 'Your Ubuntu 24.04 machine or VM']],
+  ['Isolation', ['The container or VM', 'A microVM per sandbox', 'Landlock, seccomp and a network namespace', 'A sandbox per app', 'A Linux user and a locked systemd unit per task']],
+  ['Agent holds the API key', ['Up to you', 'No, a host proxy adds it', 'No, added at approved endpoints', 'Not documented', 'No, the box\'s proxy adds it']],
+  ['Outbound hosts', ['None built in', 'Denied unless allowed', 'A policy check on every connection', 'Not documented', 'Only the hosts each task lists']],
+  ['Undo', ['A VM snapshot, if you took one', 'Clone mode works on a private copy', 'Not documented', 'Not documented', 'Per task, without touching other tasks']],
+  ['Human approval', ['None', 'Not documented', 'For risky policy changes', 'Not documented', 'For spending over a budget, on screen or phone']],
+  ['Record of actions', ['None', 'Not documented', 'Telemetry only', 'A record of what each agent read', 'A hash-chained log of every event']],
+  ['Licence', ['Varies', 'Not declared', 'Apache-2.0', 'Apache-2.0', 'Apache-2.0']],
+];
+
+const faq = [
+  ['Which agents does it run?', 'Claude Code, Codex CLI, opencode, Factory Droid, and local models through Ollama or any OpenAI- or Anthropic-compatible endpoint. Each one talks to the box\'s proxy with a placeholder key instead of talking to the provider with yours.'],
+  ['Do I have to wipe a disk?', 'No. The install script adds GurtOS to an existing Ubuntu 24.04 machine or VM and keeps your disk. Only the ISO erases the disk it installs to.'],
+  ['Can I run it on a Mac?', 'In a VM. Run Ubuntu 24.04 with UTM or Lima and use the install script inside it, or boot the arm64 ISO in UTM. GurtOS needs a Linux kernel for its task users, overlay mounts and firewall rule.'],
+  ['What does undo cover?', 'File changes in the task\'s copy. It cannot recall something a task already sent out, such as a message or a payment. Those calls are in the log so you can follow up.'],
+  ['Where are my keys?', 'In /etc/box/vault.env, owned by root with mode 0600. The box refuses to start if anyone else can read it, and it never returns a key through its API.'],
+  ['How do I check the log?', 'Each line\'s prev field is the SHA-256 of the line before, and the first line\'s is 64 zeros. An edited, removed or reordered line breaks the chain after it. The box does not check the chain for you yet, and root can rewrite the whole file.'],
+  ['Does the box send anything to you?', 'No. It talks to your model provider, the hosts each task allows, and Ubuntu\'s usual services. The privacy policy lists every connection.'],
+  ['What does it cost?', `Nothing. It is open source under the ${LICENSE_NAME}. You pay your model provider for tokens, or nothing extra with a local model.`],
+  ['Should I run it on my work laptop?', 'Not yet. It is a preview with no outside audit, and its service runs as root and creates users and firewall rules. Use a VM or a spare machine with test keys.'],
 ];
 ---
 
-<Landing title={NAME} description={`${NAME}: operating systems built for AI agents, on Ubuntu 24.04. Each agent task runs as its own Linux user on its own copy of your files, never holds your keys, and asks before it spends. Download GurtOS Server or GurtOS Personal.`}>
+<Landing title={NAME} description={`${NAME} runs Claude Code, Codex and other agents on your own Ubuntu 24.04 machine. Each task runs as its own Linux user on its own copy of your files, never sees your API keys, and can be undone. Open source under the ${LICENSE_NAME}.`}>
   <div class="wrap">
-    <section class="intro" aria-labelledby="home-h">
-      <div class="intro-text">
-        <h1 id="home-h">Operating systems built for AI agents</h1>
-        <p class="lead">Each agent task runs as its own Linux user, on its own copy of your files. It never holds your keys, it asks before it spends, and you can undo it without touching any other task.</p>
-        <p class="actions">
-          <a class="btn primary" href="/download/">Download {NAME}</a>
-          <a class="btn" href="/docs/">Read the docs</a>
-        </p>
-        <p class="status">Preview release v0.2.0-preview, built on Ubuntu 24.04. It has not had a security audit, so use a spare computer or a virtual machine.</p>
+    <section class="hero" aria-labelledby="home-h">
+      <h1 id="home-h">Undo for every agent task,<br class="br-wide" /> and no API keys inside the agent</h1>
+      <div class="hero-main">
+        <p class="lead">{NAME} runs coding agents on a Linux machine you own. Each task gets its own Linux user and its own copy of your files. The agent never holds your API key, because a proxy adds it on the way out. Every action goes into a hash-chained log.</p>
+        <div class="install">
+          <Command cmd={INSTALL} label="Copy the install command" />
+          <p class="install-note">For Ubuntu 24.04 on x86_64 or arm64, with sudo. It keeps your disk and adds a root service, the task users and one firewall rule, so run it in a VM or on a spare machine. <a href="https://gurtos.com/install.sh">Read the script</a> · <a href="/download/">Download an ISO</a> · <a href="#try">On a Mac</a></p>
+        </div>
       </div>
-      <figure class="video">
-        <a href={VIDEO} aria-label="Watch the 3-minute GurtOS video on YouTube">
-          <Image src={poster} widths={[640, 960, 1280]} sizes="(min-width: 900px) 40vw, 100vw" alt="" loading="eager" fetchpriority="high" />
-          <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
-        </a>
-        <figcaption><a href={VIDEO}>Watch the 3-minute video</a> on YouTube: a task stops for an OK, a booby-trapped page is stopped, one task is undone and the power is pulled.</figcaption>
-      </figure>
+      <dl class="spec" aria-label={`${NAME} at a glance`}>
+        <div><dt>Agents</dt><dd>Claude Code, Codex CLI, opencode, Factory Droid, local models through Ollama</dd></div>
+        <div><dt>Runs on</dt><dd>Ubuntu 24.04, x86_64 or arm64, 4 GB of memory</dd></div>
+        <div><dt>Release</dt><dd><a href={`${REPO}/releases/tag/v0.2.0-preview`}>v0.2.0-preview</a>, signed, no outside audit yet</dd></div>
+        <div><dt>Licence</dt><dd>{LICENSE_NAME}, <a href={REPO}>source on GitHub</a></dd></div>
+      </dl>
     </section>
   </div>
 
-  <svg class="hills" viewBox="0 0 1920 260" preserveAspectRatio="none" aria-hidden="true">
-    <path d="M0 80C300 0 520 40 760 10C1000 -20 1250 -40 1500 20C1750 80 1800 0 1920 30V260H0Z" fill="var(--gw-hill-1)" />
-    <path d="M0 160C260 90 520 140 820 100C1120 60 1300 130 1560 80C1820 30 1820 120 1920 100V260H0Z" fill="var(--gw-hill-2)" />
-    <path d="M0 230C300 170 640 210 960 180C1280 150 1500 210 1920 160V260H0Z" fill="var(--gw-hill-3)" />
+  <svg class="hills" viewBox="0 0 1920 200" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 70C300 0 520 34 760 10C1000 -14 1250 -30 1500 18C1750 66 1800 0 1920 26V200H0Z" fill="#46586b" />
+    <path d="M0 130C260 74 520 114 820 82C1120 50 1300 106 1560 66C1820 26 1820 98 1920 82V200H0Z" fill="#36475a" />
+    <path d="M0 180C300 132 640 164 960 140C1280 116 1500 164 1920 126V200H0Z" fill="#1c252d" />
   </svg>
+  <section class="band" id="task" aria-labelledby="task-h">
+    <div class="wrap">
+      <div class="band-head">
+        <h2 id="task-h">One task, on the box's own screen</h2>
+        <p>A real screen from a test box. A scripted agent read a page that told it to send data away. Numbers match the notes.</p>
+      </div>
+      <style is:inline set:html={pinCss}></style>
+      <div class="anatomy">
+        <figure class="shot">
+          <Image src={taskShot} widths={[720, 1080, 1440]} sizes="(min-width: 1100px) 860px, 100vw" alt="The GurtOS task screen for Find me a road bike. A red banner says the task tried 2 things it is not allowed to do and both were blocked and logged. The steps list, from the action log, includes line 58: Blocked, reaching attacker.example:443. Files it changed: bikes.md, direct.txt, exfil.txt, page.html. What it was allowed: runs as its own user, may reach example.com, budget $1.00, agent Scripted (test). Replay and Undo task buttons at the top." loading="eager" fetchpriority="high" />
+          {pins.map((p, i) => <span class="pin" style={`left:${p.x}%;top:${p.y}%`} aria-hidden="true">{i + 1}</span>)}
+          <figcaption><a href={taskShot.src}>Open the screen at full size</a></figcaption>
+        </figure>
+        <ol class="legend">
+          {pins.map((p) => <li><strong>{p.title}</strong> {p.text}</li>)}
+        </ol>
+      </div>
+      {/* DEMO SLOT: the lead's short recording of an undo goes here, in place of this link to the 3-minute video. */}
+      <a class="video" href={VIDEO}>
+        <Image src={poster} widths={[320, 480]} sizes="200px" alt="" />
+        <span><strong>Watch the 3-minute video</strong> on YouTube. A task stops for an OK, a booby-trapped page is stopped, one task is undone and the power is pulled.</span>
+      </a>
+    </div>
+  </section>
 
   <div class="wrap">
-    <section id="editions" aria-labelledby="editions-h">
-      <h2 id="editions-h" class="section-h">One core, three editions</h2>
-
-      <article class="edition" id="server">
-        <figure class="media rig">
-          <div class="desk"><DisplayFrame src={server} alt="The GurtOS Server box screen: what needs you, what is running, what was spent today, and a dock of the system apps." /></div>
-          <div class="phone"><PhoneFrame src={homeLight} dark={homeDark} alt="The GurtOS iPhone app: three requests under Needs you, each with Deny and Approve." /></div>
-        </figure>
-        <div class="text">
-          <h3><span class="dot server" aria-hidden="true"></span>{NAME} Server</h3>
-          <p>An always-on agent box with nothing else on it.</p>
-          <p class="facts"><a href="/docs/get-started/install-server/#why-it-is-light">No desktop · 1.37 GB disc · a task runs in 1 GB of RAM</a></p>
-          <p class="dl-label">Download</p>
-          <div class="dl">
-            {isos('server').map((f) => <a class="btn" href={`${RELEASE}/${f.file}`} data-arch={f.arch}>{f.label}</a>)}
+    <section class="sec" id="why" aria-labelledby="why-h">
+      <div class="sec-head">
+        <h2 id="why-h">Agents already delete files and leak keys</h2>
+        <p>Public incidents since August 2025, with sources, and what happens in a {NAME} task instead.</p>
+      </div>
+      <div class="cases">
+        <p class="cases-cols" aria-hidden="true"><span>What happened</span><span>In a {NAME} task</span></p>
+        {incidents.map((g) => (
+          <div class="case">
+            <div class="case-what">
+              <h3>{g.kind}</h3>
+              {g.cases.map((c) => (
+                <p><span class="when">{c.when}</span> {c.what} <a href={c.href}>{c.src}</a></p>
+              ))}
+            </div>
+            <p class="case-fix"><span class="sr">In a {NAME} task: </span>{g.fix}</p>
           </div>
-        </div>
-      </article>
-
-      <article class="edition" id="personal">
-        <figure class="media rig">
-          <div class="desk"><DisplayFrame src={personal} dark={personalDark} alt="GurtOS Personal in everyday use: mail, a browser and Files open, while the GurtOS app and a notification ask to approve a $42.10 grocery order." /></div>
-          <div class="phone"><PhoneFrame src={approvalLight} dark={approvalDark} alt="A request on the iPhone: Buy a GPU hour, $8, with Deny and Approve $8." /></div>
-          <div class="watch"><WatchFrame src={watch} alt="The GurtOS Apple Watch app: Buy a GPU hour, $8, with a red deny and a green approve button." /></div>
-        </figure>
-        <div class="text">
-          <h3><span class="dot personal" aria-hidden="true"></span>{NAME} Personal</h3>
-          <p>Your own laptop, with agents working beside you.</p>
-          <p class="facts"><a href="/docs/get-started/install-personal/">Ubuntu's GNOME desktop · your folders change only when you choose Keep</a></p>
-          <p class="dl-label">Download</p>
-          <div class="dl">
-            {isos('personal').map((f) => <a class="btn" href={`${RELEASE}/${f.file}`} data-arch={f.arch}>{f.label}</a>)}
-          </div>
-        </div>
-      </article>
-
-      <article class="edition" id="business">
-        <figure class="media rig">
-          <div class="desk"><DisplayFrame src={businessDesktop} alt="GurtOS Business: a $40,000 credit line Sam asked for waits for Rosa, the Controller, on her desktop." /></div>
-          <div class="phone"><PhoneFrame src={businessPhone} inset edge="#edebe6" alt="The same $40,000 credit line on Rosa's phone, with Deny and Approve $40,000." /></div>
-        </figure>
-        <div class="text">
-          <h3><span class="dot business" aria-hidden="true"></span>{NAME} Business</h3>
-          <p>A team's shared box, turned on from Server or Personal.</p>
-          <p class="facts"><a href="/docs/guides/turn-on-business/">Preview · roles · approvals routed by a policy in plain words · audit trail</a></p>
-          <div class="dl"><a class="btn" href="/docs/guides/turn-on-business/">Turn on Business</a></div>
-        </div>
-      </article>
-      <p class="more"><a href="/download/">Checksums, signatures and install steps</a></p>
+        ))}
+      </div>
     </section>
 
-    <section aria-labelledby="core-h">
-      <h2 id="core-h" class="section-h">What the core does</h2>
-      <ul class="core">
-        {core.map((c) => <li><a href={c.href}>{c.label}</a> {c.line}</li>)}
-      </ul>
+    <section class="sec" id="how" aria-labelledby="how-h">
+      <div class="sec-head">
+        <h2 id="how-h">How a task runs</h2>
+        <p>The same steps for every agent. The <a href="/docs/security/model/">security model</a> has the detail.</p>
+      </div>
+      <div class="how">
+        <ol class="steps">
+          {steps.map(([h, p]) => <li><h3>{h}</h3><p>{p}</p></li>)}
+        </ol>
+        <figure class="how-phone">
+          <div class="how-phone-frame"><PhoneFrame src={approvalLight} dark={approvalDark} sizes="220px" alt="A request on the GurtOS iPhone app: Buy a GPU hour, $8, with Deny and Approve $8." /></div>
+          <figcaption>A spend request on the iPhone app, which is in internal testing. Any phone's browser shows the same request.</figcaption>
+        </figure>
+      </div>
+      <aside class="limits" aria-labelledby="limits-h">
+        <h3 id="limits-h">What it does not protect against yet</h3>
+        <ul>{limits.map((l) => <li>{l}</li>)}</ul>
+        <p>The <a href="/docs/security/threat-model/">threat model</a> covers the rest. Report a security problem privately, as <a href={`${REPO}/blob/main/SECURITY.md`}>SECURITY.md</a> describes.</p>
+      </aside>
     </section>
 
-    <p class="closing">Open source under the <a href={REPO}>{LICENSE_NAME}</a> on GitHub.</p>
+    <section class="sec" id="compare" aria-labelledby="compare-h">
+      <h2 id="compare-h" class="statement">Sandboxes, host allowlists and proxies that add the key are common now. {NAME} adds undo for each task, a hash-chained log and a spending gate, on a machine you own.</h2>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="How GurtOS differs, scrolls sideways">
+        <table class="compare">
+          <thead>
+            <tr><th scope="col"><span class="sr">Feature</span></th>{products.map((p) => <th scope="col" class:list={{ us: p === NAME }}>{p}</th>)}</tr>
+          </thead>
+          <tbody>
+            {compare.map(([row, cells]) => (
+              <tr><th scope="row">{row}</th>{cells.map((c, i) => <td class:list={{ us: i === cells.length - 1, nd: c === 'Not documented' }}>{c}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="table-note">"Not documented" means we read the product's docs on November 24, 2026 and did not find it. Sources: <a href="https://docs.docker.com/ai/sandboxes/security/">Docker Sandboxes security</a> (its default mode mounts your folder read and write), <a href="https://github.com/NVIDIA/OpenShell">NVIDIA OpenShell</a>, and launch coverage of Cloudflare OS by <a href="https://www.helpnetsecurity.com/2026/08/06/cloudflare-os-open-source/">Help Net Security</a>. Corrections are welcome as a <a href={`${REPO}/issues`}>GitHub issue</a>.</p>
+    </section>
+
+    <section class="sec" id="try" aria-labelledby="try-h">
+      <div class="sec-head">
+        <h2 id="try-h">Three ways to run it</h2>
+        <p>Each one ends the same way. You add a model key and start a task.</p>
+      </div>
+      <div class="ways">
+        <div class="way">
+          <h3>Any Ubuntu 24.04 machine or VM</h3>
+          <div>
+            <Command cmd={INSTALL} label="Copy the install command" />
+            <p>Your disk stays as it is. The <a href="/docs/get-started/install-on-ubuntu/">install guide</a> lists what the script sets up and how to check it runs.</p>
+          </div>
+        </div>
+        <div class="way">
+          <h3>A machine set aside for it</h3>
+          <div>
+            <p>{NAME} Server is a 1.37 GB image for an always-on box with no desktop. {NAME} Personal is a 2.00 GB image for a laptop with Ubuntu's GNOME desktop. The installer erases the disk it installs to.</p>
+            <p><a class="btn" href="/download/">Download an ISO</a></p>
+          </div>
+        </div>
+        <div class="way">
+          <h3>A Mac</h3>
+          <div>
+            <p>Run Ubuntu 24.04 in a VM with UTM or Lima, then run the install script inside it. Or boot the arm64 ISO in UTM.</p>
+            <p><a href="/download/#mac">Step by step for a Mac</a></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="editions" aria-labelledby="editions-h">
+      <div class="sec-head">
+        <h2 id="editions-h">Or install it as the whole OS</h2>
+        <p>The same core ships as an install image built on Ubuntu 24.04, in three editions.</p>
+      </div>
+      <div class="editions">
+        <article class="edition">
+          <figure class="rig">
+            <div class="desk"><DisplayFrame src={server} sizes="(min-width: 900px) 420px, 75vw" alt="The GurtOS Server box screen: what needs you, what is running, what was spent today, and a dock of the system apps." /></div>
+            <div class="phone"><PhoneFrame src={homeLight} dark={homeDark} sizes="100px" alt="The GurtOS iPhone app: three requests under Needs you, each with Deny and Approve." /></div>
+          </figure>
+          <h3>{NAME} Server</h3>
+          <p>An always-on box at home or in the cloud. Its own full-screen interface, no desktop and no user with sudo. A task has run in 1 GB of memory.</p>
+          <p><a href="/docs/get-started/install-server/">Install {NAME} Server</a></p>
+        </article>
+        <article class="edition">
+          <figure class="rig">
+            <div class="desk"><DisplayFrame src={personal} dark={personalDark} sizes="(min-width: 900px) 420px, 75vw" alt="GurtOS Personal in everyday use: mail, a browser and Files open, while the GurtOS app and a notification ask to approve a $42.10 grocery order." /></div>
+            <div class="phone"><PhoneFrame src={approvalLight} dark={approvalDark} sizes="100px" alt="A request on the iPhone: Buy a GPU hour, $8, with Deny and Approve $8." /></div>
+            <div class="watch"><WatchFrame src={watch} alt="The GurtOS Apple Watch app: Buy a GPU hour, $8, with a red deny and a green approve button." /></div>
+          </figure>
+          <h3>{NAME} Personal</h3>
+          <p>Your own laptop with Ubuntu's GNOME desktop. Agents work beside you as separate users, and your folders change only when you choose Keep.</p>
+          <p><a href="/docs/get-started/install-personal/">Install {NAME} Personal</a></p>
+        </article>
+      </div>
+      <p class="business"><strong>{NAME} Business</strong> (preview) is a setting on either edition for a box a team shares: roles, approvals routed by a policy written in plain words, an audit trail and a kill switch. <a href="/docs/guides/turn-on-business/">Turn on Business</a></p>
+    </section>
+
+    <section class="sec faq" id="faq" aria-labelledby="faq-h">
+      <div class="sec-head">
+        <h2 id="faq-h">Questions</h2>
+      </div>
+      <div class="faq-list">
+        {faq.map(([q, a]) => <details><summary>{q}</summary><p>{a}</p></details>)}
+      </div>
+    </section>
+
+    <section class="cta" aria-labelledby="cta-h">
+      <h2 id="cta-h">Try it on a spare VM</h2>
+      <div class="cta-cmd"><Command cmd={INSTALL} label="Copy the install command" /></div>
+      <p><a href="/download/">Download an ISO</a> · <a href="/docs/">Read the docs</a> · <a href={REPO}>Source on GitHub</a></p>
+    </section>
   </div>
 </Landing>
 
-<script>
-  // Mark the download that matches this computer. A Mac is assumed to be Apple silicon, because Intel Macs
-  // cannot run an arm64 VM and the user agent does not say which Mac it is. No cookies, nothing is sent.
-  const ua = navigator.userAgent;
-  const arm = /Macintosh|Mac OS X/.test(ua) || /aarch64|arm64|\barm\b/i.test(ua);
-  const want = arm ? 'arm64' : 'x86_64';
-  document.querySelectorAll<HTMLAnchorElement>('.dl .btn[data-arch]').forEach((a) => {
-    if (a.dataset.arch === want) a.classList.add('primary');
-  });
-</script>
-
 <style>
-  .intro { padding: 4rem 0 3rem; display: grid; gap: 2.5rem; align-items: center; }
-  .intro h1 { margin-bottom: 1rem; }
-  .lead { font-size: var(--gw-text-lg); color: var(--gw-ink-2); max-width: 40rem; }
-  .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
-  .actions .btn.primary { font-size: 1.1rem; padding: 0.8rem 1.4rem; }
-  .actions .btn { padding: 0.8rem 1.4rem; }
-  .status { margin-top: 1.5rem; font-size: var(--gw-text-sm); color: var(--gw-ink-2); max-width: 40rem; }
-  .video { margin: 0; }
-  .video > a { position: relative; display: block; }
-  .video img { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--gw-rule); border-radius: var(--gw-radius); }
-  .play { position: absolute; left: 50%; top: 50%; translate: -50% -50%; display: grid; place-items: center; width: 3.25rem; height: 3.25rem; border-radius: 50%; background: var(--gw-action); color: var(--gw-on-action); }
-  .video > a:focus-visible { outline-offset: 4px; }
-  .video figcaption { margin-top: 0.75rem; font-size: var(--gw-text-sm); color: var(--gw-ink-2); }
-  @media (min-width: 900px) { .intro { grid-template-columns: 7fr 5fr; } }
-  .hills { display: block; width: 100%; height: clamp(70px, 11vw, 170px); }
-  .section-h { font-size: var(--gw-h2); }
-  .edition { display: grid; gap: 1.5rem 3rem; padding: 2rem 0; border-top: 1px solid var(--gw-rule); align-items: center; }
-  .media { margin: 0; }
-  /* Devices overlap a little: the phone covers only the display's right bezel and edge, and the watch only the
-     phone's right edge beside an empty part of its screen. Sizes are shares of the figure, so every row is the same. */
-  .rig { position: relative; container-type: inline-size; }
+  .hero { display: grid; gap: 32px 64px; padding: 80px 0 64px; align-items: end; }
+  .hero h1 { grid-column: 1 / -1; }
+  .hero h1 { font-size: clamp(2.5rem, 5.4vw, 4.25rem); line-height: 1.04; letter-spacing: -0.03em; max-width: 17em; }
+  .br-wide { display: none; }
+  .lead { margin: 0; max-width: 38rem; font-size: var(--gw-text-lg); line-height: 1.55; color: var(--gw-ink-2); }
+  .install { margin-top: 32px; max-width: 38rem; }
+  .install-note { margin: 12px 0 0; font-size: var(--gw-text-sm); color: var(--gw-ink-2); }
+  .spec { margin: 0; border-top: 1px solid var(--gw-rule-strong); font-size: var(--gw-text-sm); }
+  .spec > div { display: grid; grid-template-columns: 5.5rem 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--gw-rule); }
+  .spec dt { color: var(--gw-ink-2); }
+  .spec dd { margin: 0; }
+  @media (min-width: 1100px) {
+    .hero { grid-template-columns: 1fr 22rem; }
+    .br-wide { display: inline; }
+  }
+
+  /* The desktop's hills rise from the page into the night band that holds the task screen. */
+  .hills { display: block; width: 100%; height: clamp(48px, 8vw, 120px); margin-bottom: -1px; }
+  .band { background: #1c252d; color: var(--gw-on-glass); padding: 32px 0 80px; }
+  .band-head { max-width: 46rem; margin-bottom: 32px; }
+  .band-head h2 { font-size: var(--gw-h2); }
+  .band-head p { margin: 12px 0 0; color: var(--gw-on-glass-2); }
+  .band a { color: #8db4dd; }
+  .anatomy { display: grid; gap: 32px; }
+  .shot { position: relative; margin: 0; align-self: start; }
+  .shot img { width: 100%; border-radius: 8px; outline: 1px solid #3a4653; }
+  .shot figcaption { margin-top: 12px; font-size: var(--gw-text-sm); }
+  .pin, .legend li::before { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #f2b544; color: #141a21; font: 700 0.875rem/1 var(--gw-font); }
+  .pin { position: absolute; transform: translate(-50%, -50%); box-shadow: 0 0 0 3px #141a21; transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 180ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .legend { list-style: none; margin: 0; padding: 0; counter-reset: pin; }
+  .legend li { counter-increment: pin; display: grid; grid-template-columns: 28px 1fr; column-gap: 12px; padding: 4px 0 8px; color: var(--gw-on-glass-2); font-size: var(--gw-text-sm); line-height: 1.5; }
+  .legend li::before { content: counter(pin); grid-row: span 2; }
+  .legend strong { color: var(--gw-on-glass); font-weight: 600; }
+  .video { display: flex; align-items: center; gap: 16px; margin-top: 48px; max-width: 46rem; color: var(--gw-on-glass-2) !important; text-decoration: none; }
+  .video img { width: 160px; flex: none; border-radius: 4px; outline: 1px solid #3a4653; }
+  .video strong { color: #8db4dd; text-decoration: underline; text-underline-offset: 0.18em; }
+  @media (min-width: 1100px) {
+    .anatomy { grid-template-columns: minmax(0, 1fr) 20rem; gap: 40px; }
+  }
+  @media (max-width: 40rem) {
+    .pin, .legend li::before { width: 22px; height: 22px; font-size: 0.75rem; }
+    .legend li { grid-template-columns: 22px 1fr; }
+    .video img { width: 112px; }
+  }
+
+  .sec { padding-top: 96px; }
+  .sec-head { max-width: 46rem; margin-bottom: 32px; }
+  .sec-head p { margin: 12px 0 0; font-size: var(--gw-text-lg); color: var(--gw-ink-2); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  .cases-cols { display: none; margin: 0; padding-bottom: 8px; font-size: var(--gw-text-sm); color: var(--gw-ink-2); }
+  .case { display: grid; gap: 12px; padding: 24px 0; border-top: 1px solid var(--gw-rule); }
+  .case h3 { font-size: var(--gw-text-lg); margin-bottom: 8px; }
+  .case-what p { margin: 0 0 8px; color: var(--gw-ink-2); }
+  .when { font-family: var(--gw-mono); font-size: var(--gw-text-sm); color: var(--gw-ink); margin-right: 4px; }
+  .case-what a { white-space: nowrap; font-size: var(--gw-text-sm); }
+  .case-fix { margin: 0; }
+  @media (min-width: 900px) {
+    .cases-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
+    .case { grid-template-columns: 1fr 1fr; gap: 48px; }
+    .case-fix { padding-top: 36px; }
+  }
+
+  .how { display: grid; gap: 48px; }
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; display: grid; gap: 0 48px; }
+  .steps li { counter-increment: step; position: relative; padding: 24px 0 24px 48px; border-top: 1px solid var(--gw-rule); }
+  .steps li::before { content: counter(step); position: absolute; left: 0; top: 24px; font: 400 var(--gw-text-lg)/1.2 var(--gw-mono); color: var(--gw-ink-2); }
+  .steps h3 { font-size: var(--gw-text-lg); margin-bottom: 8px; }
+  .steps p { margin: 0; color: var(--gw-ink-2); }
+  .how-phone { margin: 0; display: grid; justify-items: center; gap: 12px; }
+  .how-phone-frame { width: 200px; }
+  .how-phone figcaption { max-width: 16rem; font-size: var(--gw-text-sm); color: var(--gw-ink-2); text-align: center; }
+  @media (min-width: 760px) { .steps { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1100px) {
+    .how { grid-template-columns: minmax(0, 1fr) 16rem; gap: 64px; }
+    .how-phone { position: sticky; top: 32px; align-self: start; }
+  }
+  .limits { margin-top: 48px; padding: 24px 32px; border: 1px solid var(--gw-rule-strong); border-radius: var(--gw-radius); background: var(--gw-waiting-bg); }
+  .limits h3 { font-size: var(--gw-text-lg); color: var(--gw-waiting-fg); margin-bottom: 12px; }
+  .limits ul { margin: 0 0 12px; padding-left: 1.2rem; columns: 2 22rem; column-gap: 48px; }
+  .limits li { margin-bottom: 8px; break-inside: avoid; }
+  .limits p { margin: 0; font-size: var(--gw-text-sm); }
+  @media (max-width: 40rem) { .limits { padding: 16px; } }
+
+  .statement { max-width: 24em; font-size: clamp(1.5rem, 3vw, 2.25rem); line-height: 1.25; letter-spacing: -0.02em; margin-bottom: 48px; }
+  .table-wrap { overflow-x: auto; border-top: 1px solid var(--gw-rule-strong); }
+  .table-wrap:focus-visible { outline-offset: 4px; }
+  .compare { min-width: 820px; font-size: var(--gw-text-sm); }
+  .compare th, .compare td { padding: 12px 16px 12px 0; }
+  .compare thead th { font-size: 0.95rem; vertical-align: bottom; }
+  .compare tbody th { font-weight: 600; white-space: nowrap; position: sticky; left: 0; background: var(--gw-canvas); }
+  .compare .us { background: var(--gw-surface); padding-left: 16px; color: var(--gw-ink); }
+  .compare thead .us { font-weight: 700; }
+  .compare td { color: var(--gw-ink-2); }
+  .compare td.nd { color: var(--gw-rule-strong); }
+  .table-note { margin-top: 16px; max-width: 52rem; font-size: var(--gw-text-sm); color: var(--gw-ink-2); }
+
+  .way { display: grid; gap: 12px; padding: 24px 0; border-top: 1px solid var(--gw-rule); }
+  .way h3 { font-size: var(--gw-text-lg); }
+  .way p { margin: 12px 0 0; max-width: 40rem; color: var(--gw-ink-2); }
+  .way p:first-child { margin-top: 0; }
+  @media (min-width: 900px) { .way { grid-template-columns: 18rem minmax(0, 40rem); gap: 48px; } }
+
+  .editions { display: grid; gap: 48px; }
+  .edition h3 { font-size: var(--gw-h3); margin: 24px 0 8px; }
+  .edition p { margin: 0 0 8px; color: var(--gw-ink-2); }
+  @media (min-width: 900px) { .editions { grid-template-columns: 1fr 1fr; gap: 64px; } }
+  /* Devices overlap a little: the phone covers the display's right bezel, the watch the phone's right edge. */
+  .rig { position: relative; margin: 0; container-type: inline-size; }
   .rig .desk { width: 75cqw; margin-bottom: 5cqw; }
   .rig .phone { position: absolute; left: 72.8cqw; bottom: 0; width: 17cqw; }
   .rig .watch { position: absolute; left: 88.6cqw; top: 33.4cqw; width: 11cqw; }
-  @media (max-width: 639px) {
-    .rig { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
-    .rig .desk { width: 100cqw; margin-bottom: 4cqw; }
-    .rig .phone { position: static; width: 36cqw; }
-    .rig .watch { position: static; width: 24cqw; margin: 35cqw 0 0 -2.5cqw; }
-  }
-  /* Two equal buttons side by side, or stacked at the same width where the column is narrow. */
-  .text { container-type: inline-size; }
-  .text p.dl-label { margin: 1.1rem 0 0.4rem; font-size: var(--gw-text-sm); color: var(--gw-ink-2); }
-  .dl { display: grid; grid-template-columns: repeat(2, 11.5rem); gap: 0.5rem; margin-top: 1.1rem; }
-  .dl-label + .dl { margin-top: 0; }
-  .dl .btn { padding: 0.5rem 0.8rem; font-size: 0.9rem; text-align: center; white-space: nowrap; }
-  @container (max-width: 23.6rem) { .dl { grid-template-columns: 11.5rem; } }
-  .text h3 { font-size: var(--gw-h3); display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.6rem; }
-  .text p { font-size: var(--gw-text-lg); color: var(--gw-ink-2); }
-  .text p.facts { margin-top: -0.4rem; font-size: var(--gw-text-sm); }
-  .facts a { color: var(--gw-ink-2); }
-  .dot { width: 0.8rem; height: 0.8rem; border-radius: 2px; flex: none; }
-  .dot.server { background: #46586b; outline: 1px solid var(--gw-rule-strong); }
-  .dot.personal { background: var(--gw-amber); }
-  .dot.business { background: var(--gw-link); }
-  .more { margin-top: 0.5rem; font-size: var(--gw-text-sm); }
-  .core { list-style: none; padding: 0; margin: 0; color: var(--gw-ink-2); }
-  .core li { padding: 0.8rem 0; border-top: 1px solid var(--gw-rule); }
-  .core a { font-weight: 700; color: var(--gw-ink); margin-right: 0.4rem; }
-  .closing { margin-top: 3rem; color: var(--gw-ink-2); }
-  @media (min-width: 900px) {
-    .edition { grid-template-columns: 8fr 4fr; }
-    .core { display: grid; grid-template-columns: 1fr 1fr; column-gap: 3rem; }
-  }
+  .business { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--gw-rule); max-width: 52rem; color: var(--gw-ink-2); }
+  .business strong { color: var(--gw-ink); }
+
+  .faq { display: grid; gap: 0 48px; }
+  .faq-list { border-bottom: 1px solid var(--gw-rule); }
+  .faq details { border-top: 1px solid var(--gw-rule); }
+  .faq summary { cursor: pointer; padding: 16px 0; font-weight: 600; font-size: var(--gw-text-lg); }
+  .faq details p { margin: 0 0 16px; max-width: 44rem; color: var(--gw-ink-2); }
+  @media (min-width: 900px) { .faq { grid-template-columns: 18rem minmax(0, 1fr); } }
+
+  .cta { margin-top: 96px; padding: 64px 0 0; border-top: 1px solid var(--gw-rule-strong); }
+  .cta h2 { font-size: clamp(1.875rem, 4vw, 3rem); letter-spacing: -0.02em; }
+  .cta-cmd { margin: 24px 0 16px; max-width: 38rem; }
+  .cta p { color: var(--gw-ink-2); }
 </style>

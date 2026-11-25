@@ -1,0 +1,54 @@
+---
+// A shell command with a Copy button, for the product pages (not the docs, which use Expressive Code's copy button).
+//   cmd    the exact text that is copied
+//   label  what the button's accessible name says it copies
+interface Props { cmd: string; label?: string }
+const { cmd, label = 'Copy the command' } = Astro.props;
+---
+<div class="gw-cmd">
+  <code><span class="gw-cmd-prompt" aria-hidden="true">$ </span>{cmd}</code>
+  <button type="button" class="gw-cmd-copy" data-cmd={cmd} aria-label={label}>Copy</button>
+  <span class="gw-cmd-status" role="status"></span>
+</div>
+
+<script>
+  document.addEventListener('click', async (e) => {
+    const b = e.target instanceof Element ? e.target.closest<HTMLButtonElement>('.gw-cmd-copy') : null;
+    if (!b) return;
+    const status = b.parentElement!.querySelector('.gw-cmd-status')!;
+    try {
+      await navigator.clipboard.writeText(b.dataset.cmd!);
+      b.textContent = 'Copied';
+      b.classList.remove('gw-pulse');
+      void b.offsetWidth; // restart the pulse on a second click
+      b.classList.add('gw-pulse');
+      status.textContent = 'Copied to the clipboard';
+    } catch {
+      // No clipboard access (an insecure origin, or a blocked permission): select the text so Ctrl+C works.
+      const range = document.createRange();
+      range.selectNodeContents(b.parentElement!.querySelector('code')!);
+      getSelection()?.removeAllRanges();
+      getSelection()?.addRange(range);
+      status.textContent = 'Selected. Press Ctrl+C or Command+C to copy.';
+    }
+    setTimeout(() => { b.textContent = 'Copy'; status.textContent = ''; }, 2000);
+  });
+</script>
+
+<style is:global>
+  .gw-cmd { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border: 1px solid var(--gw-rule-strong); border-radius: var(--gw-radius); background: var(--gw-surface); }
+  .gw-cmd code { flex: 1; min-width: 0; background: none; padding: 0; font-family: var(--gw-code); font-size: 1rem; line-height: 1.5; color: var(--gw-ink); overflow-wrap: anywhere; }
+  .gw-cmd-prompt { color: var(--gw-ink-2); user-select: none; }
+  .gw-cmd-copy { flex: none; min-width: 5.5rem; padding: 8px 12px; border: 0; border-radius: var(--gw-radius-sm); background: var(--gw-action); color: var(--gw-on-action); font: 600 0.875rem/1.4 var(--gw-font); cursor: pointer; }
+  .gw-cmd-copy:active { transform: translateY(1px); }
+  .gw-cmd-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .gw-pulse { animation: gw-pulse 240ms cubic-bezier(0.23, 1, 0.32, 1); }
+  @keyframes gw-pulse { 50% { transform: scale(0.95); } }
+  @media (prefers-reduced-motion: reduce) { .gw-pulse { animation: none; } }
+  /* Narrow screens: a smaller button and type, so the URL fits on its own line and breaks only at spaces. */
+  @media (max-width: 30rem) {
+    .gw-cmd { gap: 8px; padding-left: 12px; }
+    .gw-cmd code { font-size: 0.8125rem; }
+    .gw-cmd-copy { min-width: 0; padding: 8px 10px; }
+  }
+</style>

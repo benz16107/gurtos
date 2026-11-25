@@ -8,7 +8,7 @@ import ThemeToggle from './ThemeToggle.astro';
 import { REPO } from '../product.ts';
 
 interface Props {
-  current?: 'editions' | 'download' | 'docs' | 'calhacks' | '';
+  current?: 'how' | 'download' | 'docs' | 'calhacks' | '';
   origin?: string;
   calhacks?: string;
   nav?: boolean;
@@ -18,7 +18,7 @@ interface Props {
 const { current = '', origin = '', calhacks = 'https://calhacks.gurtos.com/', nav = true, landmark = true } = Astro.props;
 const Tag = landmark ? 'header' : 'div';
 const links = [
-  { id: 'editions', label: 'Editions', href: `${origin}/#editions` },
+  { id: 'how', label: 'How it works', href: `${origin}/#how` },
   { id: 'download', label: 'Download', href: `${origin}/download/` },
   { id: 'docs', label: 'Docs', href: `${origin}/docs/` },
   { id: 'calhacks', label: 'Cal Hacks', href: calhacks },
