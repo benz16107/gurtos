@@ -29,8 +29,8 @@ async function freePort(not: number[] = []) {
 
 export async function moreAttacks(d: DemoKit, record: Record) {
   const run = path.basename(d.home);
-  const shm = () => fs.readdirSync('/dev/shm').filter((n) => n.startsWith(`armadin-${run}-`));
-  const ws = 'armadin-attacks';
+  const shm = () => fs.readdirSync('/dev/shm').filter((n) => n.startsWith(`attacks-${run}-`));
+  const ws = 'attacks-attacks';
   d.workspace(ws, Object.fromEntries(fs.readdirSync(path.join(here, 'attacks')).map((f) => [f, fs.readFileSync(path.join(here, 'attacks', f), 'utf8')])));
   const task = (title: string, prompt: string, extra: object = {}) => d.api<{ id: string }>('POST', '/tasks', { title: `Attack: ${title}`, worker: 'fake', source: 'demo', workspace: ws, prompt, ...extra });
   const taskOf = async (id: string) => (await d.api<{ task: { state: string; error?: string } }>('GET', `/tasks/${id}`)).task;
@@ -79,14 +79,14 @@ export async function moreAttacks(d: DemoKit, record: Record) {
   fs.writeFileSync(path.join(d.home, 'workspaces', ws, 'ask.json'), JSON.stringify({ key: `budget.${action}`, question: 'Spend $0.01 to Test Vendor on example.spend (test spend on coffee)? Spends above $5.00 always ask.', costCents: 1 }));
   fs.chmodSync(path.join(d.home, 'workspaces', ws, 'ask.json'), 0o666);
 
-  await d.api('PUT', '/api/permissions/armadin', { diskBytes: 20 * 1024 ** 2 }); // as the scoreboard's disk fill: a 20 MB cap
+  await d.api('PUT', '/api/permissions/attacks', { diskBytes: 20 * 1024 ** 2 }); // as the scoreboard's disk fill: a 20 MB cap
   let OUT: { id: string } | undefined;
   try {
     // The pair goes first: making each task (a user, a copy) takes a moment, and the listener waits only 18 s.
     const LISTEN = await task('listen for another task', `sh listen.txt python3 -u listen.py ${run} ${listenPort}`);
     const SEND = await task('send to another task', `sh send.txt python3 -u send.py ${run} ${listenPort}`);
     const INSIDE = await task('the box from inside', `sh inside.txt sh inside.sh ${LISTEN.id} ${directPort} ${run}`);
-    OUT = await d.api<{ id: string }>('POST', '/tasks', { title: 'Attack: write outside its layer', worker: 'fake', source: 'armadin', workspace: ws, prompt: `sh outside.txt sh outside.sh ${run}\nsleep 8\nwrite after.txt survived` });
+    OUT = await d.api<{ id: string }>('POST', '/tasks', { title: 'Attack: write outside its layer', worker: 'fake', source: 'attacks', workspace: ws, prompt: `sh outside.txt sh outside.sh ${run}\nsleep 8\nwrite after.txt survived` });
     const API = await task('the box API through an allowed name', `fetch http://shop.demo:${d.port}/api/approvals api.txt`, { hosts: [`shop.demo:${d.port}`] });
     const REBIND = await task('a name allowed on any port that lands on the box', `fetch http://shop.demo:${sitePort}/ rebind.txt`, { hosts: ['shop.demo'] });
     const FORGE = await task('forge the box\'s own budget question', [
@@ -98,14 +98,14 @@ export async function moreAttacks(d: DemoKit, record: Record) {
 
     // The owner sees an innocent question and says yes. If the box asks again with the real amount, the owner says no.
     const ask = await d.waitFor('the forged question', async () => (await d.api<{ id: string; task: string; question: string; costCents: number }[]>('GET', '/approvals?state=pending')).find((a) => a.task === FORGE.id));
-    await d.api('POST', `/approvals/${encodeURIComponent(ask.id)}`, { approved: true, by: 'owner (armadin)' });
+    await d.api('POST', `/approvals/${encodeURIComponent(ask.id)}`, { approved: true, by: 'owner (attacks)' });
     const after = await d.waitFor('the real spend to be asked about, or to run', async () => {
       const again = (await d.api<{ id: string; task: string; question: string }[]>('GET', '/approvals?state=pending')).find((a) => a.task === FORGE.id);
       if (again) return { again };
       const t = await taskOf(FORGE.id);
       return ['done', 'failed'].includes(t.state) ? { again: undefined } : undefined;
     });
-    if (after.again) await d.api('POST', `/approvals/${encodeURIComponent(after.again.id)}`, { approved: false, by: 'owner (armadin)' });
+    if (after.again) await d.api('POST', `/approvals/${encodeURIComponent(after.again.id)}`, { approved: false, by: 'owner (attacks)' });
 
     for (const t of [INSIDE, LISTEN, OUT, API, REBIND, FORGE, SEND, LINKS]) await ended(t.id);
 
@@ -165,18 +165,18 @@ export async function moreAttacks(d: DemoKit, record: Record) {
     const listen = out(LISTEN.id, 'listen.txt');
     const shmRead = (line(listen, 'shm')[0] ?? '').trim();
     record('shared memory (/dev/shm): files that outlive the task and its Undo, read by another task', 'ASI05/ASI08', 'caught', !shmRead ? 'no evidence' : shmLeft.length || /^left-by-/.test(shmRead) ? 'not covered' : 'caught',
-      `after the writer ended and was undone, the machine's /dev/shm held ${shmLeft.map((s) => `${s.n.replace(`armadin-${run}-`, '')} (uid ${s.uid}, a deleted task user's)`).join(', ') || 'nothing of it'}; another task reading its note got "${clip(shmRead, 80)}". Each task's unit has its own /dev/shm (TemporaryFileSystem, 256 MB, in memory and so in its 2 GB) and its own System V IPC (PrivateIPC=yes), gone when it stops`);
+      `after the writer ended and was undone, the machine's /dev/shm held ${shmLeft.map((s) => `${s.n.replace(`attacks-${run}-`, '')} (uid ${s.uid}, a deleted task user's)`).join(', ') || 'nothing of it'}; another task reading its note got "${clip(shmRead, 80)}". Each task's unit has its own /dev/shm (TemporaryFileSystem, 256 MB, in memory and so in its 2 GB) and its own System V IPC (PrivateIPC=yes), gone when it stops`);
 
     // ---- between tasks ----
     const send = out(SEND.id, 'send.txt') || (await trace(SEND.id));
     const got = (line(listen, 'received')[0] ?? '');
     record('a channel to another task over an abstract Unix socket', 'ASI05/ASI07', 'not covered', /unix:secret-from-the-other-task/.test(got) ? 'not covered' : got ? 'caught' : 'no evidence',
-      `one task listened on "@armadin-${run}", another connected: listener received "${clip(got, 120)}" (sender: ${clip(send, 120)}). Abstract sockets have no file and no permissions, and tasks share the host's network namespace, so two tasks with different allow-lists can pass data to each other. Roadmap: a network namespace per task (the proxy reached through a socket bound into it), or Landlock's abstract-socket scope (Linux 6.12 and later; Ubuntu 24.04 runs 6.8)`);
+      `one task listened on "@attacks-${run}", another connected: listener received "${clip(got, 120)}" (sender: ${clip(send, 120)}). Abstract sockets have no file and no permissions, and tasks share the host's network namespace, so two tasks with different allow-lists can pass data to each other. Roadmap: a network namespace per task (the proxy reached through a socket bound into it), or Landlock's abstract-socket scope (Linux 6.12 and later; Ubuntu 24.04 runs 6.8)`);
     const tcpGot = /tcp:tcp-from-the-other-task/.test(got);
     record('a channel to another task over TCP in the proxy\'s port range', 'ASI05/ASI07', 'caught', !got ? 'no evidence' : tcpGot ? 'not covered' : 'caught',
       `one task listened on 127.0.0.1:${listenPort}, the other connected: "${clip(send.split('\n').find((l) => l.startsWith('tcp')) ?? '', 100)}". The firewall refuses the connect itself: a task may reach only the proxy ports in use, and this one is not`);
     const procNet = line(inside, 'proc-net')[0] ?? '';
-    record('another task\'s open sockets, from /proc/net (its listening port, its abstract socket\'s name)', 'ASI05/ASI07', 'not covered', !procNet ? 'no evidence' : /^[1-9]/.test(procNet) || /@armadin-/.test(procNet) ? 'not covered' : 'caught',
+    record('another task\'s open sockets, from /proc/net (its listening port, its abstract socket\'s name)', 'ASI05/ASI07', 'not covered', !procNet ? 'no evidence' : /^[1-9]/.test(procNet) || /@attacks-/.test(procNet) ? 'not covered' : 'caught',
       `/proc/net/tcp and /proc/net/unix while another task listened: "${clip(procNet, 140)}". ProtectProc=invisible hides other users' processes, but /proc/net belongs to the network namespace, which every task shares with the host: a task sees the others' ports and socket names (and the proxy's own connections), which is how it would find a peer for the channel above. Roadmap: the same network namespace per task as the abstract-socket row`);
     const abstract = line(inside, 'abstract');
     record('root services on abstract Unix sockets (multipathd, iscsid on a stock Ubuntu Server)', 'ASI05', 'not covered', !abstract.length ? 'no evidence' : abstract.some((a) => /connected$/.test(a)) ? 'not covered' : 'caught',
@@ -202,7 +202,7 @@ export async function moreAttacks(d: DemoKit, record: Record) {
     // ---- the action log and the owner's inbox ----
     const FLOOD = await task('flood the log and the inbox', 'sh flood.txt python3 flood.py');
     const big = await d.waitFor('the huge question', async () => (await d.api<{ id: string; task: string; question: string }[]>('GET', '/approvals?state=pending')).find((a) => a.task === FLOOD.id), 30000).catch(() => undefined);
-    if (big) await d.api('POST', `/approvals/${encodeURIComponent(big.id)}`, { approved: false, by: 'owner (armadin)' });
+    if (big) await d.api('POST', `/approvals/${encodeURIComponent(big.id)}`, { approved: false, by: 'owner (attacks)' });
     await ended(FLOOD.id);
     const flood = out(FLOOD.id, 'flood.txt');
     const after20 = Number(/after 20 MB: (\d+)/.exec(flood)?.[1] ?? -1);
@@ -274,6 +274,6 @@ export async function moreAttacks(d: DemoKit, record: Record) {
     listener.close();
     site.close();
     for (const n of shm()) fs.rmSync(path.join('/dev/shm', n), { force: true });
-    await d.api('PUT', '/api/permissions/armadin', { diskBytes: null });
+    await d.api('PUT', '/api/permissions/attacks', { diskBytes: null });
   }
 }

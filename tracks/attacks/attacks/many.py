@@ -1,4 +1,4 @@
-# Armadin: make many small files in the task's own copy, then log steps. At each step the box records what changed
+# Attack tests: make many small files in the task's own copy, then log steps. At each step the box records what changed
 # in the layer (the flight recorder), on its own thread. Usage: python3 -u many.py <count>
 import http.client, json, os, socket, sys, time
 class Broker(http.client.HTTPConnection):

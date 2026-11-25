@@ -1,4 +1,4 @@
-# Armadin: the other task sends to the listener. Usage: python3 send.py <run id> <tcp port>
+# Attack tests: the other task sends to the listener. Usage: python3 send.py <run id> <tcp port>
 import socket, sys, time
 run, port = sys.argv[1], int(sys.argv[2])
 def retry(what, fn, tries):
@@ -13,7 +13,7 @@ def retry(what, fn, tries):
     print(what + ':', err)
 def unix():
     s = socket.socket(socket.AF_UNIX)
-    s.connect('\0armadin-' + run)
+    s.connect('\0attacks-' + run)
     s.sendall(b'secret-from-the-other-task')
 def tcp():
     s = socket.create_connection(('127.0.0.1', port), 2)

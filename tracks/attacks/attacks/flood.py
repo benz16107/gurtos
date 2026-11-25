@@ -1,4 +1,4 @@
-# Armadin: log a step that claims a Keep happened, ask a huge right-to-left question, then write to the action log
+# Attack tests: log a step that claims a Keep happened, ask a huge right-to-left question, then write to the action log
 # past the broker's limits: 64 KB a request and 20 MB a task, refused requests counted too. Usage: python3 flood.py
 import http.client, json, os, socket, time
 class Broker(http.client.HTTPConnection):

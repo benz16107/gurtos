@@ -1,4 +1,4 @@
-# Armadin: open 1,000 idle connections to the box's proxy and hold them, then count how many the proxy kept open.
+# Attack tests: open 1,000 idle connections to the box's proxy and hold them, then count how many the proxy kept open.
 # Usage: python3 -u conns.py
 import os, resource, socket, time
 resource.setrlimit(resource.RLIMIT_NOFILE, (8192, resource.getrlimit(resource.RLIMIT_NOFILE)[1]))
