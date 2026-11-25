@@ -97,14 +97,15 @@ export async function moreAttacks(d: DemoKit, record: Record) {
     const LINKS = await task('links for the diff view to follow', 'sh links.txt sh links.sh\nsay planted the links');
 
     // The owner sees an innocent question and says yes. If the box asks again with the real amount, the owner says no.
-    const ask = await d.waitFor('the forged question', async () => (await d.api<{ id: string; task: string; question: string; costCents: number }[]>('GET', '/approvals?state=pending')).find((a) => a.task === FORGE.id));
+    // 60 s, like `ended`: it starts after eight other attack tasks, and on a busy test VM a task's first step took 46 s.
+    const ask = await d.waitFor('the forged question', async () => (await d.api<{ id: string; task: string; question: string; costCents: number }[]>('GET', '/approvals?state=pending')).find((a) => a.task === FORGE.id), 60000);
     await d.api('POST', `/approvals/${encodeURIComponent(ask.id)}`, { approved: true, by: 'owner (armadin)' });
     const after = await d.waitFor('the real spend to be asked about, or to run', async () => {
       const again = (await d.api<{ id: string; task: string; question: string }[]>('GET', '/approvals?state=pending')).find((a) => a.task === FORGE.id);
       if (again) return { again };
       const t = await taskOf(FORGE.id);
       return ['done', 'failed'].includes(t.state) ? { again: undefined } : undefined;
-    });
+    }, 60000);
     if (after.again) await d.api('POST', `/approvals/${encodeURIComponent(after.again.id)}`, { approved: false, by: 'owner (armadin)' });
 
     for (const t of [INSIDE, LISTEN, OUT, API, REBIND, FORGE, SEND, LINKS]) await ended(t.id);
