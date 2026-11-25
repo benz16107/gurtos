@@ -97,7 +97,7 @@ export async function moreAttacks(d: DemoKit, record: Record) {
     const LINKS = await task('links for the diff view to follow', 'sh links.txt sh links.sh\nsay planted the links');
 
     // The owner sees an innocent question and says yes. If the box asks again with the real amount, the owner says no.
-    const ask = await d.waitFor('the forged question', async () => (await d.api<{ id: string; task: string; question: string; costCents: number }[]>('GET', '/approvals?state=pending')).find((a) => a.task === FORGE.id));
+    const ask = await d.waitFor('the forged question', async () => (await d.api<{ id: string; task: string; question: string; costCents: number }[]>('GET', '/approvals?state=pending')).find((a) => a.task === FORGE.id), 60000); // eight tasks start at once: on a busy shared VM the first one takes over 20 s
     await d.api('POST', `/approvals/${encodeURIComponent(ask.id)}`, { approved: true, by: 'owner (attacks)' });
     const after = await d.waitFor('the real spend to be asked about, or to run', async () => {
       const again = (await d.api<{ id: string; task: string; question: string }[]>('GET', '/approvals?state=pending')).find((a) => a.task === FORGE.id);
