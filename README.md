@@ -22,8 +22,9 @@ words. An agent (Factory's Droid, with Claude as the model) does the work, and G
 touch, which hosts it can reach and what it must ask you first. Everything goes into one log.
 
 > [!WARNING]
-> GurtOS is a preview. It installs from its own ISO and runs end to end, but it has not had an outside security
-> audit, and the installer erases the whole disk. Use a spare machine or a VM, with test keys.
+> GurtOS is a preview. It runs end to end, but it has not had an outside security audit. Use a spare machine, a
+> cloud server or a VM, with test keys. The install script below keeps the disk as it is; the ISO's installer
+> erases it.
 
 ## What it does
 
@@ -53,7 +54,29 @@ come up healthy.
 
 ## Get started
 
-### 1. Download
+### On an Ubuntu 24.04 machine you already have
+
+A cloud server, a VM (Lima, UTM, Multipass) or a spare computer, x86_64 or arm64, with 1 GB of memory or more:
+
+```sh
+curl -fsSL https://gurtos.com/install.sh | sh
+```
+
+Before it changes anything it lists what it adds: a few packages, Node.js if yours is older than 22, two services,
+the `gurtos` group, a firewall table that limits only GurtOS's own task users, and ports on `127.0.0.1` only. Then it
+asks once. It does not touch the disk layout, your users or your files. Running it again updates GurtOS and keeps its
+data, and `curl -fsSL https://gurtos.com/install.sh | sh -s -- --uninstall` removes everything it added.
+
+It ends by printing how to open the portal (`http://127.0.0.1:7700/` on the machine, or through `ssh -L` from your
+own computer) and how to add your model key. This gives you the box service of GurtOS Server, without its
+full-screen kiosk. [Install on Ubuntu](https://gurtos.com/docs/get-started/install-on-ubuntu/) has the details.
+
+### From the ISO, on a whole machine
+
+The ISO installs GurtOS Server or GurtOS Personal as the whole system, with updates that roll back. It erases the
+disk it installs to.
+
+#### 1. Download
 
 The current release is [v0.2.0-preview](https://github.com/benz16107/gurtos/releases/tag/v0.2.0-preview).
 
@@ -73,7 +96,7 @@ because the box downloads Factory's Droid CLI (about 300 MB). Full requirements 
 The Mac and Android apps are on the
 [v0.1.0-preview release](https://github.com/benz16107/gurtos/releases/tag/v0.1.0-preview).
 
-### 2. Verify it
+#### 2. Verify it
 
 Download `SHA256SUMS`, `SHA256SUMS.sig` and `allowed_signers` from the release page, then check the signature and
 your ISO's checksum. This needs OpenSSH 8.1 or newer.
@@ -87,7 +110,7 @@ sha256sum -c SHA256SUMS --ignore-missing        # on macOS: shasum -a 256 -c SHA
 The same public key is in [`release/allowed_signers`](release/allowed_signers), and its fingerprint is on
 [gurtos.com/download](https://gurtos.com/download/).
 
-### 3. Install
+#### 3. Install
 
 1. Write the ISO to a USB stick (balenaEtcher, or `dd`), or attach it to a VM as its CD.
 2. Start from it. If the computer has one empty internal disk, the installer uses it straight away. Otherwise it
@@ -101,7 +124,7 @@ The same public key is in [`release/allowed_signers`](release/allowed_signers), 
 A new box turns on only the model app (and Find, the search app, on Personal). Every other app stays off until you
 turn it on in App Center. The install docs have step-by-step guides for a real machine, UTM, QEMU and a cloud VM.
 
-### 4. Run a task
+### Run a task
 
 Open **Tasks**, choose **New task**, and say what to do. List the hosts it may reach, or leave the list empty to
 allow only the model. Set a budget if you like, then choose **Start**. When it is done, open it to see the files it
@@ -148,8 +171,8 @@ cover. Report security problems privately, as [SECURITY.md](SECURITY.md) describ
 
 Pair a phone by scanning the code on the box's screen from the same network. You can then approve requests from the
 phone's browser or the GurtOS apps. To reach the box from outside your network, use a private network such as
-Tailscale, or [run your own relay](docs/self-host.md), which also sends push notifications. The hosted relay at
-`box.gurtos.com` is offline.
+Tailscale, or [run your own relay](docs/self-host.md), which also sends push notifications. There is no hosted
+relay, and a box uses none until you set one.
 
 On Personal, `sudo box-update apply <url of a signed .sqfs image>` installs a new system into the spare slot and
 restarts into it. If it is not healthy within 5 minutes, the computer goes back to the old one. Server has no shell,

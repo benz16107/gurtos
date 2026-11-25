@@ -30,13 +30,13 @@ The box sorts every request into one of these kinds of caller.
 
 | Caller | How the box knows | What it may do |
 |---|---|---|
-| The box's own screen | The request comes over the socket. Or it comes from `127.0.0.1` or `::1` with no proxy header (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `X-Forwarded-Host` or `Tailscale-User-Login`), a `Host` of `127.0.0.1`, `localhost` or `[::1]`, and no `Origin` except the box's own address on the API port | Everything |
+| The box's own screen | The request comes over the socket. Or it comes from `127.0.0.1` or `::1` with no proxy header (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `X-Forwarded-Host` or `Tailscale-User-Login`), a `Host` of `127.0.0.1`, `localhost` or `[::1]`, no `Origin` except the box's own address on the API port, and the connection belongs to root, the GurtOS Personal owner or a member of the `gurtos` group | Everything |
 | A helper on the box | The same, but the connecting process runs as `nobody` or as a task user | Read, start tasks and answer approvals. Never the owner's routes below |
 | A paired device | `Authorization: Bearer <token>`, or `?access_token=<token>` for the log stream, which a browser's `EventSource` cannot send headers to | Read, start tasks, undo and answer approvals |
 | A device paired as the owner | A token from a code made with `{"owner": true}` on the box's own screen | Everything a paired device may do, plus the owner's routes below |
 | An app's window | A token from `POST /api/apps/<id>/window`, which starts with `w` | Only that app's own routes, `GET /api/tasks`, `GET /api/tasks/<id>`, `GET /api/approvals`, and answers to that app's own requests. See [App routes](#app-routes) |
 
-A web page from another site, opened in a browser on the box, also arrives from `127.0.0.1`. Its `Origin` (or, for a page that points its own name at `127.0.0.1`, its `Host`) gives it away, so it needs a token. So does a page that another program on the box serves, such as an agent's dev server on `localhost:8000`, unless its origin is named in [`BOX_ORIGINS`](/docs/reference/environment/). A `*` in `BOX_ORIGINS` never counts as the box's own screen.
+Another account on the box (another person's login, a service such as `nobody`, a task user) also arrives from `127.0.0.1`, but the box looks up the account behind the connection and treats it like an outside caller: it needs a token. Add a person with `sudo usermod -aG gurtos <name>`; it takes effect on their next connection. A web page from another site, opened in a browser on the box, also arrives from `127.0.0.1`. Its `Origin` (or, for a page that points its own name at `127.0.0.1`, its `Host`) gives it away, so it needs a token. So does a page that another program on the box serves, such as an agent's dev server on `localhost:8000`, unless its origin is named in [`BOX_ORIGINS`](/docs/reference/environment/). A `*` in `BOX_ORIGINS` never counts as the box's own screen.
 
 Anyone else gets `401` and nothing is read, started, approved or undone. These stay open without a token:
 

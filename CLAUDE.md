@@ -52,8 +52,11 @@ and how its screen and controls are presented.
 - The box's screen and the portal are one web app (`portal/`). Its design comes from Figma.
 - Every app ("track") is one folder that registers itself. The core never imports a track. A new box turns on only
   the model app; every other app stays off until the owner turns it on, and must work or stay off without its keys.
-- A box works with no relay. Remote access and phone push go through a relay (`relay/`); the hosted one at
-  `box.gurtos.com` is offline, so anything that calls it must fail with a plain sentence, not hang.
+- A box works with no relay. Remote access and phone push go through a relay (`relay/`) that the owner runs and
+  sets (`BOX_RELAY` or Settings). There is no default: the hosted one at `box.gurtos.com` is gone, so with no relay
+  set anything that needs one fails at once with a plain sentence (`NO_RELAY` in `core/remote.ts`), never a call.
+- From this machine, loopback requests act as the box's own screen (the owner) only from root, the Personal owner
+  or a member of the `gurtos` group (`trustedUid` in `core/net.ts`). Every other account needs a paired token.
 
 ## Layout
 
@@ -74,7 +77,8 @@ and how its screen and controls are presented.
 - `demo` the merge gate (below). `deploy` installs origin/main as the box service on a machine you name.
 
 On a box: `BOX_HOME=/var/lib/box` holds `log.jsonl`, `workspaces/`, `views/` and `tasks/<id>/`. The vault is
-`/etc/box/vault.env` (root, 0600). The API is `127.0.0.1:7700`. Task users are `box-<id>`, uids 30000 to
+`/etc/box/vault.env` (root, 0600). The API is `127.0.0.1:7700`. `install.sh` installs a checkout or the latest main on
+an existing Ubuntu 24.04 machine, and `install.sh --uninstall` removes it. Task users are `box-<id>`, uids 30000 to
 39999.
 
 ## Rules for every change
