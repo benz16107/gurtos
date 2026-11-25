@@ -149,11 +149,13 @@ install() {
     echo "  It opens as the owner for root and for $person (the gurtos group). Other accounts must pair a device."
   fi
   echo
-  if $SUDO grep -qE '^(ANTHROPIC|FACTORY)_API_KEY=.' "$vault"; then
-    echo "It has a model key. Start your first task in the portal."
+  # Some agent can run: a model key, Ollama or the owner's own endpoint is set up (Settings, Agents & Models).
+  if $SUDO curl -fsS -m 5 http://127.0.0.1:7700/api/setup 2>/dev/null | grep -q '"ready":true'; then
+    echo "It has a model service set up. Start your first task in the portal."
   else
     echo "Add a model key: an Anthropic API key (console.anthropic.com) or a Factory API key (app.factory.ai)."
-    echo "  in the portal:  the setup wizard's Model key step, or Settings, Accounts & Keys"
+    echo "  in the portal:  the setup wizard's Model key step, or Settings, Agents & Models, which also"
+    echo "                  takes an OpenAI key, a local model through Ollama or your own endpoint"
     echo "  or here, in bash (the key is not echoed or saved in your history):"
     echo "    read -rs -p 'Anthropic API key: ' k; echo; printf '{\"value\":\"%s\"}' \"\$k\" | curl -s -X PUT http://127.0.0.1:7700/api/vault/ANTHROPIC_API_KEY -H 'content-type: application/json' -d @-; unset k"
   fi
