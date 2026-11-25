@@ -42,8 +42,8 @@ const url = (s: string) => s.replace(/\/+$/, '').replace(/\/v1$/, '') || undefin
 export const UPSTREAMS: Record<string, Upstream> = {
   anthropic: { id: 'anthropic', title: 'Anthropic', origin: () => 'https://api.anthropic.com', vaultKey: 'ANTHROPIC_API_KEY', keyRequired: true, headers: ['x-api-key'], wires: () => ['anthropic'] },
   openai: { id: 'openai', title: 'OpenAI', origin: () => 'https://api.openai.com', vaultKey: 'OPENAI_API_KEY', keyRequired: true, headers: ['authorization'], wires: () => ['openai'] },
-  // Droid's own service. Droid reaches it its own way (net.ts), not through /up/factory.
-  factory: { id: 'factory', title: 'Factory', origin: () => 'https://api.factory.ai', vaultKey: 'FACTORY_API_KEY', keyRequired: true, headers: ['authorization'], wires: () => [] },
+  // Droid's own service, which serves Claude. Droid reaches it its own way (net.ts): the proxy refuses /up/factory.
+  factory: { id: 'factory', title: 'Factory', origin: () => 'https://api.factory.ai', vaultKey: 'FACTORY_API_KEY', keyRequired: true, headers: ['authorization'], wires: () => ['anthropic'] },
   // A local model. Ollama serves both formats and wants no key.
   ollama: { id: 'ollama', title: 'Ollama', origin: (c) => url(c.ollamaHost), keyRequired: false, headers: [], wires: () => ['anthropic', 'openai'] },
   // The owner's own endpoint: LiteLLM, a company gateway. Gateways differ in which header they read, so the key goes in both.

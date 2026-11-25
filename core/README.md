@@ -16,8 +16,9 @@ namespaces or reach D-Bus, and gets at most 2 GB of memory. Its changes stay in 
 of the workspace's view. **Undo** takes one layer out of the stack. Other tasks keep theirs, and the base
 files are never written.
 
-The worker inside a task is Droid with Claude (`worker: 'droid'`), or a scripted fake for tests
-(`worker: 'fake'`, see `workers/fake.ts`).
+The worker inside a task is an agent the owner picks: Factory's Droid (`worker: 'droid'`), Claude Code (`claude`),
+Codex CLI (`codex`) or opencode (`opencode`), or a scripted fake for tests (`worker: 'fake'`, see `workers/fake.ts`).
+`agent` is the same field under the name the screens use. See "Agents and model services" below.
 
 Workspaces are folders in `BOX_HOME/workspaces`. `home` always exists and is the default. A track makes its
 own with `box.workspace(name, fromDir)`, for example from a git clone or its case files.
@@ -54,13 +55,53 @@ path, such as the account's files or batches, or running a Factory-hosted connec
 that is not JSON is a 415 and a `net.blocked` event, a call is at most 32 MB and a task's calls being read at once 64
 MB in all (413). A task may hold at most 256 connections to the proxy at once.
 
-**One model key is enough: Factory's or your own Anthropic key.** With `FACTORY_API_KEY` in the vault, Droid uses
+**Agents and model services.** Two tables decide what a task's agent may do.
+
+- `core/upstreams.ts` lists the model services ("upstreams"): `anthropic` (`ANTHROPIC_API_KEY`, sent as `x-api-key`),
+  `openai` (`OPENAI_API_KEY`, sent as `Authorization: Bearer`), `factory` (Droid's own), `ollama` (no key; the address
+  is the setting `ollamaHost`) and `custom` (the owner's own endpoint: settings `customBaseUrl` and `customWire`,
+  `anthropic` or `openai`, with the optional `CUSTOM_API_KEY` sent in both headers).
+- `core/workers/index.ts` lists the agents (`WorkerDef`): the npm package and version the box installs on first use
+  (into `BOX_HOME/agents/<name>`, or `BOX_AGENTS`), the upstreams it may use, how its model is checked, and the
+  environment and home files that point it at the proxy.
+
+An agent is given `http://127.0.0.1:<proxy port>/up/<upstream>` as its base address and
+`box-placeholder-the-box-adds-the-key` as its key. The proxy finds the task by the caller's uid, checks that the task's
+agent lists that upstream and that it is set up (403 or 503 otherwise), relays only that format's paths
+(`/v1/messages`, `/v1/messages/count_tokens`, `/v1/models`; or `/v1/responses`, `/v1/chat/completions`, `/v1/models`),
+reads the body as above, drops whatever the task put in `authorization`, `x-api-key`, `api-key` and
+`proxy-authorization`, writes the vault's key in, and sends the call on. The placeholder is never forwarded. Ollama
+and the owner's endpoint are reached by the box itself, so they need no entry in a task's hosts, and a task cannot
+reach their other paths (Ollama's `/api/pull`, say).
+
+A model call that carries a server-side web tool (`web_search_*`, `web_fetch_*`, `web_search_preview`, or
+`web_search_options`) is a 403 and a `net.blocked` event, like the other fetches: the service would reach the internet
+for the task, around its allow-list. It passes only when the tool names `allowed_domains` and the task's hosts allow
+every one of them. The agents' own settings also switch those tools off.
+
+| Agent | Run as | Pointed at the proxy by | Steps and tool calls |
+|---|---|---|---|
+| `claude` | `claude -p --output-format stream-json --verbose --setting-sources user --strict-mcp-config --permission-mode bypassPermissions` | `ANTHROPIC_BASE_URL`, and the task user's `~/.claude/settings.json` (the only settings file read: one in the workspace cannot redirect it) | stream-json lines become steps; `workers/hook.ts` as its PreToolUse (Bash) and PostToolUse hooks; `workers/mcp.ts` |
+| `codex` | `codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox` | `~/.codex/config.toml`: `[model_providers.box]` with `base_url`, `env_key`, `wire_api = "responses"`; `web_search = "disabled"` | JSON lines become steps; `[mcp_servers.box]` is `workers/mcp.ts` |
+| `opencode` | `opencode run --format json --auto` | `OPENCODE_CONFIG_CONTENT` (it wins over an `opencode.json` in the workspace) | JSON lines become steps; `mcp.box` is `workers/mcp.ts` |
+| `droid` | the Droid SDK (`workers/droid.ts`) | `FACTORY_API_BASE_URL` and the box's CA, below | its own handlers, hooks and `workers/mcp.ts` |
+
+A task's `model` may carry the upstream in front (`ollama/qwen3`, `custom/my-model`, `openai/<id>`); without one the
+agent's first upstream that is set up is used. A task that names no agent gets the setting `defaultAgent` (`auto`: the
+first agent with an upstream set up, Droid first). `GET /api/setup` and `GET /api/system` report
+`agents: {default, setting, list: [{name, title, upstreams, via, ready, installed}], upstreams: [{id, title, ready, key?, keySet?}]}`.
+An agent the box has not installed yet makes its first task wait (`queued`, "downloading" as its step). Claude Code and
+Droid ask the owner before a risky shell command; Codex and opencode do not ask before commands, and the second look
+below is Droid's only. Adding an agent is one entry in the table and one script that runs its command
+(`workers/cli.ts` has the shared part).
+
+**One model key is enough for Droid: Factory's or your own Anthropic key.** With `FACTORY_API_KEY` in the vault, Droid uses
 Factory. With only `ANTHROPIC_API_KEY`, the box writes a bring-your-own-key model into the task user's
 `~/.factory/settings.json` (the task's model, and Haiku for the second look, with a placeholder key) and runs Droid on
 `custom:<model>`; the proxy relays `api.anthropic.com` and puts the real key in the `x-api-key` header. Droid's own
 calls to Factory get a 503 then, and the task carries on. With neither, a Droid task fails at once with "No model key
 yet. Add an Anthropic or Factory API key in Settings, Accounts & Keys, then start the task again." `GET /api/setup` and
-`GET /api/system` report `model: {ready, via: 'factory' | 'anthropic' | null}`.
+`GET /api/system` report `model: {ready, via: 'factory' | 'anthropic' | 'openai' | 'custom' | 'ollama' | null}`.
 
 **Droid arrives after the first start.** Its license keeps it out of the image, so a new GurtOS computer downloads it
 (about 300 MB) and writes how that goes to `/run/box-os/droid` (`state=`, `message=`, `at=`). A Droid task made before
@@ -400,6 +441,8 @@ The `owner` flag is ignored from anyone who is not already the owner.
 - `watchLimitCents` (2500): the most an Apple Watch token may approve (below, "The native apps"). 0: a Watch may only deny.
 - `networkDefault` (`none`) and `defaultHosts` (`[]`): with `allowlist`, a task that names no hosts gets `defaultHosts`; a task that names its own keeps them.
 - `agentFolders` (`[]`): Personal. Folders agents may use besides the owner's home. Can't include the system or the box's own state. Empty means only the owner's home.
+- `defaultAgent` (`auto`): the agent of a task that names none: `auto`, `droid`, `claude`, `codex` or `opencode`.
+- `ollamaHost` (`""`), `customBaseUrl` (`""`) and `customWire` (`anthropic` | `openai`): where a local model and the owner's own model endpoint are. Empty is off.
 - `quietHours` (`{enabled: false, from: "22:00", to: "07:00"}`): read by the desktop and phone for notifications.
 - `paused` (false): Pause all agents. While true no task starts (new ones stay `queued`) and running ones hold before their next step, tool call or question; false resumes them all. Enforced by the core.
 - `logRetentionDays` (365), `updateChannel` (`stable` | `beta`), `autoUpdate` (true), `appearance` (`{theme: light | dark | system, accent: "#rrggbb" or ""}`): stored for the screens and the updater to read.
@@ -771,7 +814,7 @@ answers without `/api`, which is what the demo and tracks use.
 | Request | Returns |
 |---|---|
 | `GET /api/tasks` | Every task: `id, title, state, source, workspace, costCents, budgetCents, step, summary, error, createdAt, updatedAt` |
-| `POST /api/tasks {title, prompt, workspace?, tools?, hosts?, budgetCents?}` | The new task. Workspace defaults to `home`, worker to Droid. A field the box doesn't know (a typo like `folders`) is refused with a 400 naming it. `folder` (Personal) is a real field: the owner's folder the task works a copy of, kept on the task. |
+| `POST /api/tasks {title, prompt, workspace?, agent?, model?, tools?, hosts?, budgetCents?}` | The new task. Workspace defaults to `home`, the agent to the setting `defaultAgent`. A field the box doesn't know (a typo like `folders`) is refused with a 400 naming it. `folder` (Personal) is a real field: the owner's folder the task works a copy of, kept on the task. |
 | `POST /api/tasks {..., files: [{name, data}]}` | Files shared to a new task (the Mac app's Share menu): 1 to 8, base64, 5 MB in all, plain names. They go to a new workspace whose name the box picks (`shared-<random>`), so the task's copy holds only them; a task with files can't name a workspace, folder or folders. The log keeps names and sizes, never the contents. |
 | `GET /api/tasks/<id>` | `{task, approvals, events}`: the task, its approvals, and its whole action log |
 | `GET /api/tasks/<id>/diff` | `{changes: [{path, change}], diff}`: what it added, modified or deleted, and a unified diff of the first 200 changed files (at most 200 KB; `changes` lists them all) |

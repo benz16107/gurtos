@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_SETTINGS, applyPatch } from './config.ts';
 import { BOX_PLACEHOLDER } from './upstreams.ts';
-import { AGENTS, WORKERS, plan, splitModel } from './workers/index.ts';
+import { AGENTS, WORKERS, canUse, plan, splitModel } from './workers/index.ts';
 import type { WorkerCtx } from './workers/index.ts';
 
 const ctx = (o: Partial<WorkerCtx>): WorkerCtx => ({ upstream: 'anthropic', wire: 'anthropic', model: 'claude-sonnet-5-5', base: (u) => `http://127.0.0.1:8888/up/${u}`, home: '/var/lib/box/tasks/t1/home', socket: '/var/lib/box/tasks/t1/broker.sock', caPem: '/var/lib/box/relay-ca.pem', proxy: 'http://127.0.0.1:8888', ...o });
@@ -47,6 +47,18 @@ test("Codex gets a config.toml with the proxy as its provider, the Responses for
   assert.ok(!WORKERS.codex.files!(ctx({ upstream: 'openai', wire: 'openai', model: undefined }))['.codex/config.toml'].includes('model ='), "no model named: Codex's own default");
 });
 
+test('opencode gets its settings in the one place a folder\'s own config file cannot override', () => {
+  const env = WORKERS.opencode.env(ctx({ upstream: 'ollama', wire: 'anthropic', model: 'qwen3' }));
+  assert.equal(env.BOX_MODEL, 'anthropic/qwen3');
+  const cfg = JSON.parse(env.OPENCODE_CONFIG_CONTENT);
+  assert.deepEqual(cfg.provider.anthropic, { options: { baseURL: 'http://127.0.0.1:8888/up/ollama/v1', apiKey: '{env:BOX_API_KEY}' }, models: { qwen3: {} } });
+  assert.equal(env.BOX_API_KEY, BOX_PLACEHOLDER);
+  assert.match(cfg.mcp.box.command.at(-1), /workers\/mcp\.ts$/);
+  assert.equal(cfg.mcp.box.environment.BOX_SOCKET, '/var/lib/box/tasks/t1/broker.sock');
+  assert.equal(WORKERS.opencode.env(ctx({ upstream: 'openai', wire: 'openai', model: 'gpt-x' })).BOX_MODEL, 'openai/gpt-x');
+  assert.throws(() => plan(WORKERS.opencode, undefined, (u) => u === 'openai'), /name the OpenAI model/);
+});
+
 test('Droid keeps its own setup: Factory by default, its settings file only on the owner\'s Anthropic key', () => {
   const f = ctx({ upstream: 'factory' });
   assert.equal(WORKERS.droid.env(f).BOX_MODEL, 'claude-sonnet-5-5');
@@ -76,6 +88,23 @@ test('a model is checked for the agent and the service it runs on', () => {
   assert.throws(() => plan(WORKERS.codex, 'a b', all), /model id/);
   assert.throws(() => plan(WORKERS.codex, 'gpt-5', () => false), /No model key yet\. Codex needs one of these/);
   assert.throws(() => plan(WORKERS.droid, undefined, () => false), /^Error: No model key yet\. Add an Anthropic or Factory API key/);
+});
+
+test('an agent can use a model service once it is set up and speaks a format the agent sends', () => {
+  const off = { ollamaHost: '', customBaseUrl: '', customWire: 'anthropic' as 'anthropic' | 'openai' };
+  const vault = (...names: string[]) => (k: string) => (names.includes(k) ? 'k' : undefined);
+  const via = (agent: string, cfg = off, key = vault()) => WORKERS[agent].upstreams.filter((u) => canUse(WORKERS[agent], u, cfg, key));
+  assert.deepEqual(via('droid', off, vault('FACTORY_API_KEY')), ['factory'], 'Droid on a Factory key alone');
+  assert.deepEqual(via('droid', off, vault('FACTORY_API_KEY', 'ANTHROPIC_API_KEY')), ['factory', 'anthropic']);
+  assert.deepEqual(via('claude', off, vault('FACTORY_API_KEY', 'OPENAI_API_KEY')), [], 'neither is Claude Code\'s');
+  assert.deepEqual(via('claude', off, vault('ANTHROPIC_API_KEY')), ['anthropic']);
+  assert.deepEqual(via('codex', off, vault('ANTHROPIC_API_KEY', 'OPENAI_API_KEY')), ['openai']);
+  const gateway = { ...off, customBaseUrl: 'https://gw.example', ollamaHost: 'http://127.0.0.1:11434' };
+  assert.deepEqual(via('claude', gateway), ['custom', 'ollama']);
+  assert.deepEqual(via('codex', gateway), ['ollama'], 'the endpoint speaks Anthropic\'s format, which Codex does not');
+  assert.deepEqual(via('codex', { ...gateway, customWire: 'openai' }), ['custom', 'ollama']);
+  assert.deepEqual(via('opencode', gateway, vault('OPENAI_API_KEY')), ['openai', 'custom', 'ollama']);
+  assert.deepEqual(via('fake'), []);
 });
 
 test('the default agent and the model addresses are settings, checked like the rest', () => {

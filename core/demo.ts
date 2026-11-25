@@ -388,11 +388,11 @@ await moment('agents: Claude Code runs a task through the proxy, with a placehol
   }
 });
 
-// Live: the same agents on a real model. Off by default because it spends model credit: DEMO_LIVE=claude (or codex).
+// Live: the same agents on a real model. Off by default because it spends model credit: DEMO_LIVE=claude (or codex, opencode).
 // It uses the test machine's own /etc/box/vault.env: ANTHROPIC_API_KEY or OPENAI_API_KEY, or CUSTOM_BASE_URL with
 // CUSTOM_API_KEY for an endpoint of your own (CUSTOM_WIRE=openai or both if it speaks OpenAI's format), and DEMO_LIVE_MODEL.
 const liveVault = Object.fromEntries(machineVault.split('\n').flatMap((l) => (/^\w+=/.test(l) ? [[l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1).trim()]] : [])));
-for (const [agent, title, wire, own] of [['claude', 'Claude Code', 'anthropic', 'ANTHROPIC_API_KEY'], ['codex', 'Codex', 'openai', 'OPENAI_API_KEY']] as const) {
+for (const [agent, title, wire, own] of [['claude', 'Claude Code', 'anthropic', 'ANTHROPIC_API_KEY'], ['codex', 'Codex', 'openai', 'OPENAI_API_KEY'], ['opencode', 'opencode', 'anthropic', 'ANTHROPIC_API_KEY']] as const) {
   const on = new RegExp(`\\b${agent}\\b`).test(process.env.DEMO_LIVE ?? '');
   const custom = liveVault.CUSTOM_BASE_URL && [wire, 'both'].includes(liveVault.CUSTOM_WIRE ?? 'anthropic');
   await moment(
@@ -402,7 +402,7 @@ for (const [agent, title, wire, own] of [['claude', 'Claude Code', 'anthropic', 
       : async () => {
           if (custom) await api('PATCH', '/api/settings', { customBaseUrl: liveVault.CUSTOM_BASE_URL, customWire: wire });
           if (custom && liveVault.CUSTOM_API_KEY) await api('PUT', '/api/vault/CUSTOM_API_KEY', { value: liveVault.CUSTOM_API_KEY }); // the step above put its own test key there
-          const name = liveVault.DEMO_LIVE_MODEL ?? (agent === 'claude' ? 'haiku' : undefined);
+          const name = liveVault.DEMO_LIVE_MODEL ?? (agent === 'codex' ? undefined : 'haiku');
           workspace(`live-${agent}`, { 'notes.md': '# Notes\n' });
           const T = await api<Task>('POST', '/tasks', { title: `${title} adds a note`, workspace: `live-${agent}`, agent, ...(custom ? { model: `custom/${name ?? 'gpt-5'}` } : name ? { model: name } : {}), source: 'demo', tools: ['example.spend'], budgetCents: 100, prompt: `Append the line "${title} was here." to notes.md. Then buy one coffee for 50 cents with the example spend tool from the box MCP server (on: coffee). Do nothing else.` });
           const sample = sampleEnv(T.user);
@@ -423,6 +423,33 @@ for (const [agent, title, wire, own] of [['claude', 'Claude Code', 'anthropic', 
     !on ? `it spends model credit: DEMO_LIVE=${agent} ./demo runs it` : `no ${own} (or CUSTOM_BASE_URL) in /etc/box/vault.env on this machine`,
   );
 }
+
+// Live, a local model: Claude Code on Ollama, with no key anywhere. Off by default because a model on a CPU is slow:
+// DEMO_LIVE=ollama, with Ollama on the test machine and a model pulled (DEMO_OLLAMA_MODEL in its vault.env, else qwen3:0.6b).
+const OLLAMA = 'http://127.0.0.1:11434';
+const ollamaUp = /\bollama\b/.test(process.env.DEMO_LIVE ?? '') && (await fetch(`${OLLAMA}/api/version`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok, () => false));
+await moment(
+  'agents: live Claude Code on a local model through Ollama',
+  !ollamaUp
+    ? undefined
+    : async () => {
+        await api('PATCH', '/api/settings', { ollamaHost: OLLAMA });
+        const name = `ollama/${liveVault.DEMO_OLLAMA_MODEL ?? 'qwen3:0.6b'}`;
+        workspace('live-ollama', {});
+        const T = await api<Task>('POST', '/tasks', { title: 'A local model says ok', workspace: 'live-ollama', agent: 'claude', model: name, source: 'demo', prompt: 'Reply with the single word ok. Do not use any tools.' });
+        // A hijacked task tries Ollama's own port and its model-management path: neither is a model call through the proxy.
+        const P = await api<Task>('POST', '/tasks', { title: 'Reach Ollama directly', workspace: 'live-ollama', worker: 'fake', source: 'demo', prompt: `connect 127.0.0.1:11434 direct.txt` });
+        await settled([T.id, P.id], 900000);
+        const { task: t, events } = await api<{ task: Task; events: LogEvent[] }>('GET', `/tasks/${T.id}`);
+        const cost = events.find((e) => e.type === 'cost' && e.model === name);
+        check(t.model === name && events.some((e) => e.type === 'task.step' && (e.data as { summary?: boolean } | undefined)?.summary), `Claude Code ran on ${name} and answered ("${t.summary?.slice(0, 60)}")`);
+        check(cost?.type === 'cost' && cost.cents === 0 && (cost.tokens?.output ?? 0) > 0, `its tokens are counted (${cost?.type === 'cost' ? cost.tokens?.output : 0} out) and a local model costs nothing`);
+        check(!events.some((e) => e.type === 'net.blocked'), 'every call it made was one the box relays');
+        check(!/^connected/.test(view('live-ollama', 'direct.txt') ?? ''), `a task cannot reach Ollama's port itself, only model calls through the proxy (${view('live-ollama', 'direct.txt')})`);
+        await api('PATCH', '/api/settings', { ollamaHost: '' });
+      },
+  /\bollama\b/.test(process.env.DEMO_LIVE ?? '') ? `Ollama does not answer on ${OLLAMA} on this machine` : 'a local model on a CPU is slow: DEMO_LIVE=ollama ./demo runs it',
+);
 
 // ---------- the action log, followed live ----------
 

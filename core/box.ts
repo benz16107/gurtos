@@ -16,7 +16,7 @@ import { Tries, closeProxy, firewall, fromScreen, logBlocked, sourceOf, stopLogg
 import * as sandbox from './sandbox.ts';
 import { HOME, dirs } from './sandbox.ts';
 import { UPSTREAMS, upstreamReady } from './upstreams.ts';
-import { AGENTS, WORKERS, agentBin, agentsDir, plan, splitModel } from './workers/index.ts';
+import { AGENTS, WORKERS, agentBin, agentsDir, canUse, plan, splitModel } from './workers/index.ts';
 import type { WorkerDef } from './workers/index.ts';
 import { usageCents } from './pricing.ts';
 import { DEFAULT_SETTINGS, SETUP_STEPS, applyPatch, folderRefusal, hadHumanUse, hostProblem, loadDisabled, loadSetup, loadSettings, readJson, readState, recordStep, saveDisabled, saveSettings, saveSetup, writeJson, type Settings, type SetupState } from './config.ts';
@@ -784,8 +784,7 @@ class Core {
 
   /** Whether this agent's tasks can use this upstream now: it is set up, and speaks a format the agent sends. */
   usable(def: WorkerDef, upstream: string) {
-    const u = UPSTREAMS[upstream];
-    return upstreamReady(u, this.settings, (k) => this.vault.get(k)) && u.wires(this.settings).some((w) => def.wires.includes(w));
+    return canUse(def, upstream, this.settings, (k) => this.vault.get(k));
   }
 
   /** The agent of a task that names none: the owner's choice, or the first that has a model service (Droid when none has). */

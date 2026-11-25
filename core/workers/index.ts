@@ -4,8 +4,8 @@
 // environment and home files that point it there with a placeholder key, and how it is installed.
 import path from 'node:path';
 import { DEFAULT_MODEL, MODELS, modelProblem, resolveModel } from '../models.ts';
-import { BOX_PLACEHOLDER, UPSTREAMS } from '../upstreams.ts';
-import type { Wire } from '../upstreams.ts';
+import { BOX_PLACEHOLDER, UPSTREAMS, upstreamReady } from '../upstreams.ts';
+import type { UpstreamConfig, Wire } from '../upstreams.ts';
 
 const ANTHROPIC_PLACEHOLDER = 'sk-ant-placeholder-the-box-adds-the-key'; // Droid's own two, swapped by net.ts
 const FACTORY_PLACEHOLDER = 'fk-placeholder-the-box-adds-the-key';
@@ -155,6 +155,34 @@ export const WORKERS: Record<string, WorkerDef> = {
       };
     },
   },
+
+  // opencode, run as `opencode run` (workers/opencode.ts). It reads a config file from the folder it works in and
+  // lets that one win over the user's own, so its settings go in OPENCODE_CONFIG_CONTENT, which wins over both.
+  opencode: {
+    name: 'opencode',
+    title: 'opencode',
+    upstreams: ['anthropic', 'openai', 'custom', 'ollama'],
+    wires: ['anthropic', 'openai'],
+    pkg: 'opencode-ai@1.19.6',
+    cmd: 'opencode',
+    model: (asked, upstream) => anyModel(asked, upstream, upstream === 'openai' ? undefined : process.env.BOX_MODEL?.replace(/^custom:/, '') || DEFAULT_MODEL) ?? fail('model: name the OpenAI model for opencode, like openai/gpt-5'),
+    env: (o) => ({
+      // opencode names a model provider/model. The provider here is only the format the call is sent in.
+      BOX_MODEL: `${o.wire}/${o.model}`,
+      BOX_API_KEY: BOX_PLACEHOLDER,
+      OPENCODE_CONFIG_CONTENT: JSON.stringify({
+        autoupdate: false,
+        share: 'disabled',
+        provider: { [o.wire]: { options: { baseURL: `${o.base(o.upstream)}/v1`, apiKey: '{env:BOX_API_KEY}' }, models: { [o.model!]: {} } } },
+        mcp: { box: { type: 'local', command: node('./mcp.ts'), environment: { BOX_SOCKET: o.socket }, enabled: true } },
+        permission: { websearch: 'deny' }, // a search service on the internet, outside the task's host list
+      }),
+    }),
+  },
+};
+
+const fail = (message: string): never => {
+  throw new Error(message);
 };
 
 function claudeEnv(o: WorkerCtx): Record<string, string> {
@@ -177,6 +205,12 @@ export const boxMcp = (socket: string) => {
   const [command, ...args] = node('./mcp.ts');
   return { command, args, env: { BOX_SOCKET: socket } };
 };
+
+/** Whether this agent's tasks can use this upstream now: it is set up, and speaks a format the agent sends. */
+export function canUse(def: WorkerDef, upstream: string, cfg: UpstreamConfig, key: (name: string) => string | undefined): boolean {
+  const u = UPSTREAMS[upstream];
+  return def.upstreams.includes(upstream) && upstreamReady(u, cfg, key) && u.wires(cfg).some((w) => def.wires.includes(w));
+}
 
 /** 'ollama/qwen3' names the upstream and the model; 'sonnet' only the model. */
 export function splitModel(asked?: string): { upstream?: string; model?: string } {
