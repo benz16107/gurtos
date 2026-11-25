@@ -7,7 +7,7 @@ import { Notifications, RemoteAccess } from './remote.tsx';
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import qrcode from 'qrcode-generator';
-import { api, box, loadApps, loadSetup, onEvent, pairing, patchSettings, useBox, type AppInfo, dayOf } from '../live.ts';
+import { agentTitle, api, box, loadApps, loadSetup, onEvent, pairing, patchSettings, useBox, type AppInfo, dayOf } from '../live.ts';
 import { AddRow, Alert, AppIcon, Badge, Button, ComboRow, Group, Icon, IconButton, LinkRow, Row, Sheet, SwitchRow } from '../kit/ui.tsx';
 import { HeaderBar, InWindow, open, phone, useWin } from '../wm.tsx';
 import { access } from '../shell.tsx';
@@ -15,8 +15,8 @@ import { PRODUCT } from '../product.ts';
 import { dollars, keyLabel, loopback, money, plural, selfBox, sentence, testApp, byApp, useNow } from '../util.ts';
 import { formatCode, pairLink as link, pairNote, useRelayUp, type PairCode } from '../relay.ts';
 import { KillSwitchPage, PeoplePage, RulesPage } from './company.tsx';
-/** One model key lets agents think: an Anthropic key or a Factory key. */
-const MODEL_KEYS = ['ANTHROPIC_API_KEY', 'FACTORY_API_KEY'];
+/** The keys that let agents think. One is enough; which one depends on the agent. */
+const MODEL_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'FACTORY_API_KEY', 'CUSTOM_API_KEY'];
 
 type Page = [id: string, title: string, icon: string, words: string];
 /** GurtOS Business adds a COMPANY group (docs/figma/business/1a-people.png): people, rules and the kill switch. */
@@ -29,7 +29,7 @@ const COMPANY: (Page | 'sep' | 'company')[] = [
 ];
 const ALL_PAGES: (Page | 'sep' | 'company')[] = [
   ['general', 'General', 'computer', 'name address time zone network ethernet wi-fi restart run setup again'],
-  ['agents', 'Agents & Models', 'applications-science', 'worker droid claude model keys spend today'],
+  ['agents', 'Agents & Models', 'applications-science', 'worker agent droid claude code codex opencode ollama local model keys endpoint spend today'],
   'sep',
   ...COMPANY,
   ['permissions', 'Permissions', 'security-high', 'internet hosts network folders spending budget approval quiet hours'],
@@ -312,6 +312,9 @@ function Agents() {
   const b = useBox();
   const [vault, reload] = useVault();
   const [sheet, setSheet] = useState<string>();
+  const [address, setAddress] = useState<'ollamaHost' | 'customBaseUrl'>();
+  const set = useSet();
+  const agents = b.setup?.agents;
   const today = dayOf();
   let model = 0;
   let tools = 0;
@@ -327,7 +330,7 @@ function Agents() {
     const k = vault?.find((x) => x.name === name);
     const other = vault?.some((x) => x.name !== name && MODEL_KEYS.includes(x.name));
     return (
-      <Row title={what} sub={!b.owner ? 'Only the owner sees which keys are set' : k ? `${name} · ${k.setAt ? `set ${when(k.setAt)}` : 'set outside Settings'}` : `${name} · ${other ? 'not needed, the other key is set' : "not set: tasks can't run until one model key is"}`}>
+      <Row title={what} sub={!b.owner ? 'Only the owner sees which keys are set' : k ? `${name} · ${k.setAt ? `set ${when(k.setAt)}` : 'set outside Settings'}` : `${name} · ${other ? 'not set, another model key is' : "not set: tasks can't run until one model key is"}`}>
         <Button onClick={() => setSheet(name)} disabled={!b.owner}>
           {k ? 'Replace' : 'Set key'}
         </Button>
@@ -336,18 +339,58 @@ function Agents() {
   };
   return (
     <>
-      <Group title="Agents" caption="Every task runs as its own user, with an agent inside. Agents use Claude.">
-        <Row icon="applications-science" title="Claude" sub="Through Factory's Droid">
-          <Value>Default</Value>
-        </Row>
-        <Row title="Model" sub={modelId ? 'The last one a task used' : "Droid's own default for Claude"}>
+      <Group title="Agents" caption="Every task runs as its own user, with an agent inside. Pick the agent for a task in New task; this is the one a task gets when it names none.">
+        {agents && b.settings && (
+          <ComboRow
+            icon="applications-science"
+            title="Default agent"
+            sub={b.settings.defaultAgent === 'auto' ? `Now ${agentTitle(agents.default)}: the first agent that has a model key` : 'For tasks that name no agent'}
+            value={b.settings.defaultAgent}
+            options={[['auto', 'Automatic'], ...agents.list.map((a): [string, string] => [a.name, a.ready ? a.title : `${a.title} (not set up yet)`])]}
+            onChange={(v) => void set({ defaultAgent: v }).then(loadSetup)}
+            disabled={!b.owner}
+          />
+        )}
+        {agents?.list.map((a) => (
+          <Row title={a.title} sub={`Can use: ${a.upstreams.map((u) => agents.upstreams.find((x) => x.id === u)?.title ?? u).join(', ')}`} key={a.name}>
+            <Value tone={a.ready ? 'success' : undefined}>{a.ready ? `Ready (${a.via.map((u) => agents.upstreams.find((x) => x.id === u)?.title ?? u).join(', ')})` : 'Needs a key or address'}</Value>
+          </Row>
+        ))}
+        <Row title="Model" sub={modelId ? 'The last one a task used' : "Each agent's own default"}>
           <Value>{modelId || 'Default'}</Value>
         </Row>
       </Group>
-      <Group title="Model key" caption="One is enough: an Anthropic API key (console.anthropic.com, bills your Anthropic account) or a Factory API key (app.factory.ai, uses Factory credits). Write-only. Agents never see it.">
+      <Group title="Model keys" caption="One is enough. Each bills that account. Write-only: agents hold a placeholder, and GurtOS adds the key to each model call on the way out.">
         {keyRow('ANTHROPIC_API_KEY', 'Anthropic API key')}
+        {keyRow('OPENAI_API_KEY', 'OpenAI API key')}
         {keyRow('FACTORY_API_KEY', 'Factory API key')}
         <LinkRow title="Other keys" sub="Keys for the apps that are on" onClick={() => open('settings/keys')} />
+      </Group>
+      <Group title="Local and your own models" caption="A model on this computer or your network through Ollama, or any endpoint that speaks Anthropic's or OpenAI's format, such as LiteLLM or a company gateway. Name the model on the task: ollama/qwen3, custom/a-model.">
+        <Row title="Ollama address" sub={b.settings?.ollamaHost || 'Off. Ollama usually listens on http://127.0.0.1:11434'}>
+          <Button onClick={() => setAddress('ollamaHost')} disabled={!b.owner}>
+            {b.settings?.ollamaHost ? 'Change' : 'Set'}
+          </Button>
+        </Row>
+        <Row title="Your own endpoint" sub={b.settings?.customBaseUrl || 'Off'}>
+          <Button onClick={() => setAddress('customBaseUrl')} disabled={!b.owner}>
+            {b.settings?.customBaseUrl ? 'Change' : 'Set'}
+          </Button>
+        </Row>
+        {b.settings?.customBaseUrl && (
+          <ComboRow
+            title="Its format"
+            sub="Claude Code needs Anthropic's. Codex needs OpenAI's Responses."
+            value={b.settings.customWire}
+            options={[
+              ['anthropic', 'Anthropic (Messages)'],
+              ['openai', 'OpenAI (Responses, Chat Completions)'],
+            ]}
+            onChange={(v) => void set({ customWire: v }).then(loadSetup)}
+            disabled={!b.owner}
+          />
+        )}
+        {b.settings?.customBaseUrl && keyRow('CUSTOM_API_KEY', 'Its key, if it wants one')}
       </Group>
       <Group title="Today" caption="Estimates, from the action log">
         <Row title="Spent on models">
@@ -361,6 +404,7 @@ function Agents() {
         </Row>
       </Group>
       {sheet && <KeySheet name={sheet} onClose={() => setSheet(undefined)} onSaved={reload} />}
+      {address && <AddressSheet field={address} onClose={() => setAddress(undefined)} />}
     </>
   );
 }
@@ -438,6 +482,33 @@ function Permissions() {
       {sheet === 'hosts' && <HostsSheet onClose={() => setSheet(undefined)} />}
       {sheet === 'folder' && <FolderSheet onClose={() => setSheet(undefined)} />}
     </>
+  );
+}
+
+/** Where Ollama or the owner's own model endpoint is. Empty turns it off. */
+function AddressSheet({ field, onClose }: { field: 'ollamaHost' | 'customBaseUrl'; onClose: () => void }) {
+  const [text, setText] = useState(box.settings![field]);
+  const [error, setError] = useState('');
+  const save = () =>
+    patchSettings({ [field]: text.trim() }).then(() => (void loadSetup(), onClose()), (e) => setError((e as Error).message));
+  const ollama = field === 'ollamaHost';
+  return (
+    <InWindow>
+      <Sheet title={ollama ? 'Ollama address' : 'Your own model endpoint'} onCancel={onClose} onDone={() => void save()} done="Save">
+        <label class="gos-field">
+          <span class="t-body-strong">Address</span>
+          <input class="g-field gos-set-mono" value={text} placeholder={ollama ? 'http://127.0.0.1:11434' : 'https://gateway.example.com'} spellcheck={false} onInput={(e) => setText((e.target as HTMLInputElement).value)} />
+          <span class="t-caption t-secondary">
+            {ollama ? 'Tasks reach it only through GurtOS, and only for model calls.' : 'Without /v1 at the end. Tasks reach it only through GurtOS, and only for model calls.'} Leave empty to turn it off.
+          </span>
+        </label>
+        {error && (
+          <p class="gos-error" role="alert">
+            Not saved: {error}
+          </p>
+        )}
+      </Sheet>
+    </InWindow>
   );
 }
 

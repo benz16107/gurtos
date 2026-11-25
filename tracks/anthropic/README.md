@@ -1,6 +1,7 @@
 # Claude
 
-Claude is the model behind every GurtOS agent task. Each task runs Factory's Droid with a Claude model, and the model
+Claude is the default model for GurtOS agent tasks. A task runs an agent you choose (Claude Code, Codex, opencode or
+Factory's Droid; see "Choose your agent" in the docs and `core/README.md`), and the model
 key stays in the box's vault. Agents never see it: the box's proxy adds it to their model calls on the way out. This
 folder has the parts that are about Claude: choosing a model per task, what it costs, a second look at risky steps,
 a measured attack test and the numbers for the one-line installer on a small machine.

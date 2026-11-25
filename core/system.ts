@@ -143,11 +143,13 @@ export function failureText(why: string | undefined, code: unknown, via?: string
   if (!w && typeof code === 'number' && code >= 200 && code <= 243) return `GurtOS could not start this task's sandbox (systemd code ${code}). Try the task again; if it keeps failing, restart this computer.`;
   if (/ENOSPC|no space left on device|EDQUOT/i.test(w)) return "This computer's disk is full. Free some space, then run the task again.";
   // Only the real agent's failures are about Claude; a scripted task's error is its own tool's (a payment URL down).
-  if (worker !== 'droid') return w ? w.slice(0, 300) : `The task stopped with an error (code ${code}).`;
-  // Same words as the Personal desktop's banner.
-  if (/\b401\b|authentication_error|invalid x-api-key|invalid api key/i.test(w)) return `Your ${via === 'factory' ? 'Factory' : 'Anthropic'} key was not accepted. Change it in Settings, Accounts & Keys.`;
-  if (/\b429\b|rate.?limit|overloaded/i.test(w)) return "Claude is busy or the key's limit was reached. Try again in a minute.";
-  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed/i.test(w)) return "Couldn't reach Claude. Check this computer's internet connection.";
+  if (worker === 'fake') return w ? w.slice(0, 300) : `The task stopped with an error (code ${code}).`;
+  // Same words as the Personal desktop's banner. `via` is the model service (core/upstreams.ts).
+  const service = ({ factory: 'Factory', openai: 'OpenAI', custom: 'model endpoint', ollama: 'Ollama' } as Record<string, string>)[via ?? ''] ?? 'Anthropic';
+  const model = !via || via === 'factory' || via === 'anthropic' ? 'Claude' : 'the model';
+  if (/\b401\b|authentication_error|invalid x-api-key|invalid api key|incorrect api key/i.test(w)) return `Your ${service} key was not accepted. Change it in Settings, Accounts & Keys.`;
+  if (/\b429\b|rate.?limit|overloaded/i.test(w)) return `${model[0].toUpperCase()}${model.slice(1)} is busy or the key's limit was reached. Try again in a minute.`;
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed/i.test(w)) return `Couldn't reach ${model}. Check this computer's internet connection.`;
   if (/still downloading/i.test(w)) return w;
   if (w) return w.slice(0, 300);
   return code === 'SIGKILL' || code === 137 ? 'The task was stopped: it used more memory than it may.' : `The agent stopped with an error (code ${code}).`;

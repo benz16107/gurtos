@@ -45,8 +45,10 @@ and how its screen and controls are presented.
 ## Decided
 
 - TypeScript on Node 22.18 or newer, run directly (type stripping), no build step. It must run on arm64 and x86_64.
-- Factory's Droid is the worker inside every task, with Claude as the model. A box needs one model key: an
-  Anthropic API key or a Factory API key.
+- The worker inside a task is pluggable. Supported agents: Claude Code, Codex CLI, opencode and Factory's Droid
+  (`core/workers/index.ts`). Model calls go to Anthropic, OpenAI, Factory, a local model through Ollama, or the
+  owner's own Anthropic- or OpenAI-compatible endpoint (`core/upstreams.ts`). A box needs one of those set up. The
+  agent holds a placeholder, never a key: the box's proxy adds the vault's key on the way out.
 - SpacetimeDB, self-hosted on the box (TypeScript module), holds live task status and approvals. The action
   log stays on disk so undo and resume don't depend on it.
 - The box's screen and the portal are one web app (`portal/`). Its design comes from Figma.

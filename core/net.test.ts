@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { MAX_MODEL_BODY, Tries, allowed, trustedUid, uidOf, anthropicPath, destination, factoryPath, fetchesOnItsOwn, fromScreen, sourceOf, startProxy, withKey } from './net.ts';
 import type { Task } from './contract.ts';
+import { BOX_PLACEHOLDER, UPSTREAMS, addressProblem, keyed, upstreamReady } from './upstreams.ts';
 
 test('a task reaches a name on the box only on the exact host:port it was given, never a box port', async () => {
   assert.match((await destination(['localhost:5555'], 'localhost', '5555')) ?? '', /^(127\.0\.0\.1|::1)$/); // either loopback: the OS decides which one "localhost" is
@@ -116,7 +117,7 @@ test('the proxy reads every model call: no compressed or non-JSON body, at most 
   const blocked: string[] = [];
   const task = { id: 'tproxytest', worker: 'droid', hosts: [] } as unknown as Task;
   const port = await startProxy(
-    { taskOf: () => task, blocked: (_t, host) => blocked.push(host), leaked: () => false, factoryKey: () => 'fk-real', anthropicKey: () => undefined },
+    { taskOf: () => task, blocked: (_t, host) => blocked.push(host), leaked: () => false, key: (name) => (name === 'FACTORY_API_KEY' ? 'fk-real' : undefined), config: () => ({ ollamaHost: '', customBaseUrl: '', customWire: 'anthropic' }) },
     { key: Buffer.from(''), cert: Buffer.from('') },
   );
   // A plain path is Droid's Factory API (FACTORY_API_BASE_URL); its model calls are read before they go on.
@@ -188,4 +189,125 @@ test('a connection over ::1 is matched to its account in /proc/net/tcp6', async 
   assert.equal(await seen, process.getuid!());
   c.destroy();
   server.close();
+});
+
+test("a web search or fetch the model service would run from its side is refused, unless it is held to hosts the task may reach", () => {
+  const call = (tool: object) => ({ model: 'm', messages: [{ role: 'user', content: 'hi' }], tools: [{ name: 'Bash', input_schema: {} }, tool] });
+  // Anthropic's server tools, as Claude Code's WebSearch sends them.
+  assert.match(fetchesOnItsOwn(call({ type: 'web_search_20250305', name: 'web_search', max_uses: 8 })) ?? '', /web_search_20250305/);
+  assert.match(fetchesOnItsOwn(call({ type: 'web_fetch_20250910', name: 'web_fetch' }), ['example.com']) ?? '', /web_fetch/);
+  // OpenAI's hosted search: the Responses tool (Codex sends it unless told not to) and the Chat Completions option.
+  assert.match(fetchesOnItsOwn({ model: 'm', input: 'hi', tools: [{ type: 'web_search' }] }, ['example.com']) ?? '', /web_search/);
+  assert.match(fetchesOnItsOwn({ model: 'm', input: 'hi', tools: [{ type: 'web_search_preview' }] }) ?? '', /web_search_preview/);
+  assert.match(fetchesOnItsOwn({ model: 'm', messages: [], web_search_options: {} }) ?? '', /web search/);
+  // Held to the task's own hosts, it reaches nothing the task could not.
+  assert.equal(fetchesOnItsOwn(call({ type: 'web_search_20250305', name: 'web_search', allowed_domains: ['docs.example.com'] }), ['*.example.com']), undefined);
+  assert.equal(fetchesOnItsOwn({ input: 'hi', tools: [{ type: 'web_search', filters: { allowed_domains: ['example.com'] } }] }, ['example.com']), undefined);
+  assert.ok(fetchesOnItsOwn(call({ type: 'web_search_20250305', name: 'web_search', allowed_domains: ['example.com', 'other.example'] }), ['example.com']), 'one domain off the list');
+  assert.ok(fetchesOnItsOwn(call({ type: 'web_search_20250305', name: 'web_search', allowed_domains: [] }), ['example.com']), 'an empty list means everywhere');
+  assert.ok(fetchesOnItsOwn(call({ type: 'web_search_20250305', name: 'web_search', blocked_domains: ['x.example'] }), ['example.com']));
+  // The agent's own tools, and what an allowed search left in the history, go through.
+  assert.equal(fetchesOnItsOwn(call({ name: 'WebFetch', description: 'Fetches a URL', input_schema: { type: 'object' } })), undefined);
+  assert.equal(fetchesOnItsOwn({ messages: [{ role: 'assistant', content: [{ type: 'web_search_tool_result', content: [] }, { type: 'server_tool_use', name: 'web_search', input: { query: 'x' } }] }] }), undefined);
+});
+
+test("an upstream gets the vault's key in its own header, and never what the task sent", () => {
+  const sent = { host: '127.0.0.1:8888', 'x-api-key': BOX_PLACEHOLDER, authorization: `Bearer ${BOX_PLACEHOLDER}`, 'api-key': 'guess', 'proxy-authorization': 'Basic eA==', 'anthropic-beta': 'tools-1', 'content-type': 'application/json' };
+  const a = keyed(sent, 'api.anthropic.com', UPSTREAMS.anthropic, 'sk-real');
+  assert.deepEqual(a, { 'anthropic-beta': 'tools-1', 'content-type': 'application/json', host: 'api.anthropic.com', 'x-api-key': 'sk-real' });
+  const o = keyed(sent, 'api.openai.com', UPSTREAMS.openai, 'sk-real');
+  assert.equal(o.authorization, 'Bearer sk-real');
+  assert.equal(o['x-api-key'], undefined);
+  const c = keyed(sent, 'gw.example', UPSTREAMS.custom, 'gw-real');
+  assert.deepEqual([c['x-api-key'], c.authorization], ['gw-real', 'Bearer gw-real'], 'gateways differ in the header they read');
+  const local = keyed(sent, '127.0.0.1:11434', UPSTREAMS.ollama);
+  assert.ok(!JSON.stringify(local).includes(BOX_PLACEHOLDER) && local.authorization === undefined && local['x-api-key'] === undefined, 'a local model gets no key, and not the placeholder');
+  for (const out of [a, o, c, local]) assert.ok(!JSON.stringify(out).includes(BOX_PLACEHOLDER));
+});
+
+test('an upstream is ready once it has its address and, if it needs one, its key', () => {
+  const off = { ollamaHost: '', customBaseUrl: '', customWire: 'anthropic' as const };
+  const none = () => undefined;
+  assert.ok(!upstreamReady(UPSTREAMS.anthropic, off, none) && upstreamReady(UPSTREAMS.anthropic, off, (k) => (k === 'ANTHROPIC_API_KEY' ? 'k' : undefined)));
+  assert.ok(!upstreamReady(UPSTREAMS.ollama, off, none) && upstreamReady(UPSTREAMS.ollama, { ...off, ollamaHost: 'http://127.0.0.1:11434' }, none), 'Ollama needs no key');
+  assert.ok(upstreamReady(UPSTREAMS.custom, { ...off, customBaseUrl: 'https://gw.example/v1/' }, none), 'the owner\'s endpoint may want no key');
+  assert.equal(UPSTREAMS.custom.origin({ ...off, customBaseUrl: 'https://gw.example/llm/v1/' }), 'https://gw.example/llm', '/v1 is part of each call, not of the address');
+  assert.deepEqual(UPSTREAMS.custom.wires({ ...off, customWire: 'openai' }), ['openai']);
+  assert.equal(addressProblem('http://127.0.0.1:11434'), undefined);
+  assert.equal(addressProblem(''), undefined);
+  for (const bad of ['ftp://x', 'gw.example', 'https://user:pw@gw.example', 'https://gw.example/?k=1', 7]) assert.ok(addressProblem(bad), String(bad));
+});
+
+test("the proxy relays an agent's model calls: the vault key goes on, the placeholder does not, and only for an upstream its agent may use", async () => {
+  process.env.BOX_PROXY_PORT = 'auto';
+  // The model service: the owner's own endpoint, here a server on loopback that keeps what it was sent.
+  const got: { url?: string; headers: http.IncomingHttpHeaders; body: string }[] = [];
+  const service = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => (got.push({ url: req.url, headers: req.headers, body }), res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}')));
+  });
+  await new Promise<void>((r) => service.listen(0, '127.0.0.1', r));
+  const at = `http://127.0.0.1:${(service.address() as net.AddressInfo).port}/gateway`;
+  const blocked: string[] = [];
+  let task = { id: 'tup', worker: 'claude', hosts: ['docs.example.com'] } as unknown as Task;
+  let cfg = { ollamaHost: '', customBaseUrl: at, customWire: 'anthropic' as 'anthropic' | 'openai' };
+  const port = await startProxy({ taskOf: () => task, blocked: (_t, host) => blocked.push(host), leaked: () => false, key: (name) => (name === 'CUSTOM_API_KEY' ? 'gw-real-key' : undefined), config: () => cfg }, { key: Buffer.from(''), cert: Buffer.from('') });
+  const send = (path: string, body?: object, method = body ? 'POST' : 'GET') =>
+    new Promise<{ status: number; text: string }>((resolve) => {
+      const req = http.request({ host: '127.0.0.1', port, path, method, headers: { 'x-api-key': BOX_PLACEHOLDER, authorization: `Bearer ${BOX_PLACEHOLDER}`, 'content-type': 'application/json' } });
+      req.on('response', (r) => {
+        let text = '';
+        r.on('data', (c) => (text += c));
+        r.on('end', () => resolve({ status: r.statusCode ?? 0, text }));
+      });
+      req.end(body ? JSON.stringify(body) : undefined);
+    });
+  try {
+    const msg = { model: 'm', max_tokens: 5, messages: [{ role: 'user', content: 'hi' }] };
+    assert.equal((await send('/up/custom/v1/messages?beta=true', msg)).status, 200);
+    assert.equal(got.length, 1);
+    assert.equal(got[0].url, '/gateway/v1/messages?beta=true', "sent to the owner's address, under its own path");
+    assert.deepEqual([got[0].headers['x-api-key'], got[0].headers.authorization], ['gw-real-key', 'Bearer gw-real-key'], "the vault's key is on the call");
+    assert.ok(!JSON.stringify(got[0].headers).includes(BOX_PLACEHOLDER), 'the placeholder never leaves the box');
+    assert.deepEqual(JSON.parse(got[0].body), msg);
+
+    // A search the service would run from its side: refused and logged, unless held to the task's hosts.
+    const search = await send('/up/custom/v1/messages', { ...msg, tools: [{ type: 'web_search_20250305', name: 'web_search' }] });
+    assert.equal(search.status, 403);
+    assert.match(search.text, /may not ask the model service to fetch a web_search_20250305 tool/);
+    assert.ok(blocked.some((b) => /web_search_20250305/.test(b)), 'the refusal is in the log');
+    assert.equal((await send('/up/custom/v1/messages', { ...msg, tools: [{ type: 'web_search_20250305', name: 'web_search', allowed_domains: ['docs.example.com'] }] })).status, 200);
+    assert.equal(got.length, 2);
+
+    // Only model calls, in the format the endpoint speaks.
+    assert.equal((await send('/up/custom/v1/files', msg)).status, 403);
+    assert.equal((await send('/up/custom/v1/responses', { model: 'm', input: 'hi' })).status, 403, "OpenAI's path on an Anthropic-format endpoint");
+    assert.equal((await send('/up/custom/api/pull', { model: 'm' })).status, 403);
+    // Only the upstreams its agent may use, and only ones that are set up.
+    assert.equal((await send('/up/openai/v1/responses', { model: 'm', input: 'hi' })).status, 403, 'Claude Code has no business at OpenAI');
+    assert.equal((await send('/up/factory/v1/messages', msg)).status, 403);
+    assert.equal((await send('/up/nowhere/v1/messages', msg)).status, 403);
+    assert.equal((await send('/up/anthropic/v1/messages', msg)).status, 503, 'allowed, but the vault has no Anthropic key');
+    assert.equal((await send('/up/ollama/v1/messages', msg)).status, 503, 'allowed, but no Ollama address is set');
+    task = { ...task, worker: 'fake' } as Task;
+    assert.equal((await send('/up/custom/v1/messages', msg)).status, 403, 'a scripted task has no model service');
+    assert.equal(got.length, 2, 'none of the refused calls reached the service');
+
+    // Codex on the same endpoint, once the owner says it speaks OpenAI's format. Hosted search is refused there too.
+    task = { ...task, worker: 'codex' } as Task;
+    cfg = { ...cfg, customWire: 'openai' };
+    assert.equal((await send('/up/custom/v1/responses', { model: 'm', input: 'hi' })).status, 200);
+    assert.equal(got[2].headers.authorization, 'Bearer gw-real-key');
+    assert.equal((await send('/up/custom/v1/responses', { model: 'm', input: 'hi', tools: [{ type: 'web_search' }] })).status, 403);
+    assert.equal((await send('/up/custom/v1/models')).status, 200);
+    // A local model: no key at all goes on.
+    cfg = { ...cfg, ollamaHost: at.replace('/gateway', '') };
+    assert.equal((await send('/up/ollama/v1/chat/completions', { model: 'qwen3', messages: [] })).status, 200);
+    const local = got.at(-1)!;
+    assert.ok(local.headers.authorization === undefined && local.headers['x-api-key'] === undefined && local.url === '/v1/chat/completions');
+  } finally {
+    delete process.env.BOX_PROXY_PORT;
+    service.close();
+  }
 });

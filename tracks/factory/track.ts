@@ -223,7 +223,7 @@ export default {
           source: 'droid-exec',
           hosts: b.hosts ?? [],
           ...(b.budgetCents !== undefined ? { budgetCents: b.budgetCents } : {}),
-          ...(b.worker === 'fake' ? { worker: 'fake' as const } : { droid: opts(b) }),
+          ...(b.worker === 'fake' ? { worker: 'fake' as const } : { worker: 'droid', droid: opts(b) }), // Droid's own options: this app's jobs run on Droid whatever the box's default agent is
         });
         return Response.json({ task });
       } catch (e) {

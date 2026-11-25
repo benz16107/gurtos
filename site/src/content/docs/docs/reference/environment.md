@@ -29,7 +29,8 @@ Then run `systemctl daemon-reload && systemctl restart box.service`. On a GurtOS
 | `BOX_OWNER` | none | Personal (preview): the owner's Linux user. An owner set at runtime with `PUT /api/owner` (saved in `BOX_HOME/owner.json`) wins over it. On the GurtOS Personal image, `box-owner.service` runs `personal/install.sh`, which writes it to `box.service.d/personal.conf` for the first person in the `sudo` group once the desktop's own setup has made that account. Leave it unset on a Server box. |
 | `BOX_EDITION` | `personal` with an owner, else `server` | The edition `GET /api/system` reports: `server`, `personal` or `business`. `business` also turns the Business edition on the first time the box starts, until its saved setting says otherwise. |
 | `BOX_APPROVAL_WAIT_MS` | `150000` | How long one `/ask` or over-budget `/call` waits for an answer before returning "pending, call again". Keep it under the worker's tool-call timeout. |
-| `BOX_MODEL` | `claude-sonnet-5-5` | The model a Droid task uses when it names none: `haiku`, `sonnet`, `opus` or a model id that starts with `claude-`. The task records the exact id it ran on. |
+| `BOX_AGENTS` | `BOX_HOME/agents` | Where the box installs Claude Code, Codex and opencode the first time a task uses one. |
+| `BOX_MODEL` | `claude-sonnet-5-5` | The Claude model a task uses when it names none: `haiku`, `sonnet`, `opus` or a model id that starts with `claude-`. The task records the exact id it ran on. |
 | `BOX_REVIEW` | on | `off` switches off the second look, the Haiku check of risky agent steps in Droid tasks. |
 | `BOX_TASK_DISK_CAP` | 5 GiB | How many bytes a task may write to its own copy before the box stops and undoes it. An app's own permission can set a different limit; this variable wins over both. |
 | `BOX_PROXY_PORT` | `8888` | The task proxy's port. `auto` picks a free port in 8800 to 8887. It must stay in 8800 to 8899: the proxy refuses that whole range as a destination, and a new box finds the other boxes' proxies there. The firewall opens only the ports in use. |
@@ -86,7 +87,7 @@ Droid tasks also get:
 | `DEMO_ONLY` | One app's name (or a core group such as `personal`): `./demo` runs only that step. |
 | `DEMO_LIVE` | App names, separated by commas or spaces, whose paid or slow live calls should run. Off by default, so runs are offline. `droid` turns on the real Droid steps, which spend Factory credit; `--live-droid` does the same. |
 | `DEMO_LIVE_DROID_FORCE` | Runs the real Droid steps even when Factory's 5-hour limit is nearly used up. Without it, the suite turns them off at 90%. |
-| `BOX_NO_DROID` | Set by the suite on the box it starts when real Droid is off: a Droid task is refused instead of spending credit. `core/setup.sh` also reads it: `1` installs everything but Droid, and the image build sets it. |
+| `BOX_NO_DROID` | Set by the suite on the box it starts when real Droid is off: a Droid task is refused instead of spending credit, and a task that names no agent counts as a Droid task. `core/setup.sh` also reads it: `1` installs everything but Droid, and the image build sets it. |
 | `STDB_ROOT` | Read by `core/setup.sh` only, to try its SpacetimeDB step somewhere else. It installs the pinned SpacetimeDB files under that folder instead of `/root/.local`, and does not link `/usr/local/bin/spacetime`. |
 | `BOX_DEMO` | Set by the suite on the box it starts. With it set, agents may work on a root-owned folder, which a real box refuses. A new box keeps every app on, and a key that starts with `demo-` is accepted without calling Anthropic. |
 | `BOX_HOSTS` | A JSON object such as `{"shop.demo":"127.0.0.1"}` of host names the task proxy resolves itself. For tests only. |
