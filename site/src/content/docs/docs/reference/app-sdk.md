@@ -77,7 +77,7 @@ What `track.ts` default-exports.
 | `apps` | `App[]` | Pages listed in the portal's app grid. |
 | `routes` | `Record<string, Route>` | HTTP routes keyed `'METHOD /path'`, served at `/t/<name>/path`. The path matches exactly, with no wildcards. |
 | `openRoutes` | `string[]` | Route keys, as in `routes`, that need no paired device's token from off the box. For a route that is public on purpose, or checks its own credential such as a shared secret. An open route must return nothing private unless its own check passes. |
-| `ownOrigin` | `string[]?` | Route keys, as in `routes`, whose HTML page is served with the box's own origin instead of the sandbox every other app page gets. Only for a page that cannot work without a real origin, such as a passkey (WebAuthn) ceremony. Shopper's Face ID page (`GET /approve`) is the one. Such a page runs with the box's origin, so review it like core code: it shows an agent's text only escaped and loads nothing from another site. The window token and every other rule still apply. |
+| `ownOrigin` | `string[]?` | Route keys, as in `routes`, whose HTML page is served with the box's own origin instead of the sandbox every other app page gets. Only for a page that cannot work without a real origin, such as a passkey (WebAuthn) ceremony. The example app's `GET /approve` page shows it. Such a page runs with the box's origin, so review it like core code: it shows an agent's text only escaped and loads nothing from another site. The window token and every other rule still apply. |
 
 ## `TaskSpec`
 
@@ -93,7 +93,7 @@ What a trigger, route or API call asks for when it starts a task.
 | `tools` | `string[]` | `[]` | Tool names the task may call. A name no app registers is refused. |
 | `hosts` | `string[]` | `[]` | At most 50 hosts the task's network may reach, written `example.com`, `*.example.com` or `example.com:8080`. `localhost`, loopback and link-local names and a wildcard over a whole top-level domain are refused. A name that resolves to the box or a private network needs an exact `host:port`. See [Network policy](/docs/concepts/network-policy/). |
 | `budgetCents` | `number` | Settings `defaultBudgetCents` (100, or $1, on a new box) | Spending above this, in US cents, pauses the task for an OK. A whole number from 0 to 100000. |
-| `source` | `string` | the app's name, or `'api'` | Who started it: `'schedule'`, `'api'`, `'jira:BOX-12'` |
+| `source` | `string` | the app's name, or `'api'` | Who started it: `'schedule'`, `'api'`, `'github:owner/repo#7'` |
 | `folder` | `string?` | none | GurtOS Personal: a real folder of the owner's that the task works on a copy of. Through the API only the owner may send it. |
 | `folders` | `string[]?` | none | GurtOS Personal: several real folders in one task, side by side. `folder` is then the first. |
 | `seat` | `string?` | none | The agent seat doing the work, such as `Credit analyst`, at most 60 characters. Shown in the audit. |
@@ -142,7 +142,7 @@ A `TaskSpec` with every field filled in, plus:
 | `payee` | `string?` | Who gets paid, or the host being reached |
 | `purpose` | `string?` | What it is for |
 | `state` | `'pending' \| 'approved' \| 'denied'` | |
-| `by` | `string?` | Who answered: a paired device's name, what the box's own screen sent, `'jira:<name>'`, `'asi1'`. On a Business box, the person's name. |
+| `by` | `string?` | Who answered: a paired device's name, what the box's own screen sent, `'desktop:<name>'`. On a Business box, the person's name. |
 | `person`, `via`, `askedBy`, `route`, `shadow` | | GurtOS Business: the id of the person who answered, the phone or screen the answer came from, the person who asked for the task (they may not answer it), where the policy sent the request and why, and the seat a shadow-mode suggestion came from |
 
 ## `Box`
@@ -246,12 +246,12 @@ The box sets the request header `x-box-caller` and replaces any copy the caller 
 | `screen` | The box's own screen |
 | `owner` | A phone paired as the owner |
 | `device:<id>` | Another paired phone |
-| `service` | A helper on the box, such as the ASI:One agent |
+| `service` | A helper on the box, such as a chat agent |
 | `none` | An open route reached through a proxy with no token |
 
 On a GurtOS Business box the header `x-box-person` carries the signed-in person's id. A page in a GurtOS window (below) calls as whoever opened the window, so `x-box-caller` is `screen` on the box's own screen and `owner` or `device:<id>` on a phone.
 
-From outside the box a route needs a paired device's token, like the rest of the API, and a request relayed by a reverse proxy on the box counts as outside. An app can list a route in `openRoutes` to skip that check. The route must then return nothing private unless its own check passes, such as a shared secret, as the Jira app's routes do. The owner can turn that off for an app (the `strangers` permission below), and then the route needs a token again.
+From outside the box a route needs a paired device's token, like the rest of the API, and a request relayed by a reverse proxy on the box counts as outside. An app can list a route in `openRoutes` to skip that check. The route must then return nothing private unless its own check passes, such as a shared secret. The owner can turn that off for an app (the `strangers` permission below), and then the route needs a token again.
 
 ## An app's page
 
@@ -260,7 +260,7 @@ An app's page is whatever its routes return as HTML or XML, usually `GET /`. Gur
 The sandbox leaves out `allow-same-origin`, so the page has no origin of its own. It cannot read the portal around it, the device's token or the box's storage, and it cannot act as the box's screen. A bug or injected script in one app's page cannot use the owner's controls. In return:
 
 - **No browser storage.** `localStorage`, cookies and `sessionStorage` are unavailable. Keep state in memory or in the app's own routes.
-- **No passkeys, unless the route is in `ownOrigin`.** They need a real origin. Shopper's Face ID page (`GET /approve`) is listed in `ownOrigin` and served without the sandbox. Every other page has no origin.
+- **No passkeys, unless the route is in `ownOrigin`.** They need a real origin. The example app's `GET /approve` page is listed in `ownOrigin` and served without the sandbox. Every other page has no origin.
 - **A token of its own.** `POST /api/apps/<app>/window` (from the box's own screen or a paired device) returns `{token, expiresAt}`. A token starts with `w`, lasts 12 hours and ends when the device that opened it is removed (401 `this window has expired: close it and open the app again`). The app must be on, or the answer is 404. The box keeps at most 1000 open windows and drops the oldest. GurtOS opens the page at `/t/<app><href>?access_token=<token>`.
 - **The token is carried for you.** The box puts a small script first in every HTML page that adds `Authorization: Bearer <token>` to the page's own `fetch` calls to the box. `/kit/gurtos.js` also adds it to links, forms and `EventSource`. A request the browser makes by itself, such as `<script type="module" src>` or `<img>`, carries no header, so add `location.search` to its address.
 - **What the token reaches.** The app's own routes (`/t/<app>/...`), `GET /api/tasks`, `GET /api/tasks/<id>`, `GET /api/approvals`, and `POST /api/approvals/<id>` for requests from the app's own tasks (`task.app`). Everything else is 403: the vault, settings, pairing, another app's routes, and opening another window.

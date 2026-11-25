@@ -75,7 +75,7 @@ Undo is safe to repeat. Undoing a task that is already undone returns it unchang
 
 ## Limits
 
-- Undo removes **file changes** in the workspace. It cannot recall something a task already sent out through a tool, such as a message or a payment. Those calls are in the task's log so you can follow up. An app can add its own reversal: the shopping agent refunds a test order when you undo its purchase task.
+- Undo removes **file changes** in the workspace. It cannot recall something a task already sent out through a tool, such as a message or a payment. Those calls are in the task's log so you can follow up.
 - An undone task cannot be redone, because its files are deleted. Start a new task instead.
 - On GurtOS Personal, a task on your own folders is not a layer in a workspace. Undo discards its changes before they reach your folder. After a Keep, Undo also takes the changes out of your folder, or changes nothing (a `409`) if you edited a kept file since. Only the owner can do that. See [give an agent a folder](/docs/guides/keep-or-undo/).
 - A workspace holds up to 499 finished tasks. Past that, a new task there is refused with a message, until you undo finished tasks there you no longer need or give the task another workspace.

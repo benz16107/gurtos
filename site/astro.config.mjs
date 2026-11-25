@@ -142,12 +142,7 @@ export default defineConfig({
           label: 'Optional apps',
           collapsed: true,
           items: [
-            'docs/guides/connect-jira',
-            'docs/guides/send-the-log-to-elastic',
-            'docs/guides/asi-one',
             'docs/guides/verify-a-receipt',
-            'docs/guides/agent-payments',
-            'docs/guides/shopping-agent',
           ],
         },
         {

@@ -151,7 +151,7 @@ The same question under the same key gives the same approval, even after a resta
 | `task` | string | |
 | `id` | string | The approval's id |
 | `approved` | boolean | |
-| `by` | string | Who answered: a paired device's name, what the box's own screen sent (`box screen`, `portal`, `phone` or `desktop:<name>`), `jira:<name>`, `asi1`, `undo`, `task ended` |
+| `by` | string | Who answered: a paired device's name, what the box's own screen sent (`box screen`, `portal`, `phone` or `desktop:<name>`), `undo`, `task ended` |
 | `person` | string, optional | GurtOS Business: the id of the person who answered |
 | `via` | string, optional | GurtOS Business: the phone or screen the answer came from |
 

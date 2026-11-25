@@ -34,7 +34,7 @@ GurtOS is built from other people's work, each under its own licence. The main p
 The [licence report](https://github.com/benz16107/gurtos/blob/main/release/licenses.md) lists the licence of
 every package in each image, and each release has a software bill of materials per image.
 
-Model providers and apps that call outside services, such as Anthropic, Factory, Jira, Elastic, Stripe or Apify, are
+Model providers and apps that call outside services, such as Anthropic or Factory, are
 used under your own account and that provider's terms.
 
 ## Related

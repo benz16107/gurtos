@@ -26,7 +26,7 @@ intended. **Not built** means a known gap with no plan yet; it is listed so you 
 | Item | Status | Why |
 |---|---|---|
 | Updates from the screen | Not built | `box-update` needs a root shell. GurtOS Personal has one through `sudo`. A release build of GurtOS Server does not, so a Server box moves to a new release by reinstalling, which erases its disk. |
-| Tested on real PCs, UTM and Parallels | Planned | Tested so far in QEMU on x86_64 (BIOS and UEFI) and arm64 (emulated), and on a Vultr instance. |
+| Tested on real PCs, UTM and Parallels | Planned | Tested so far in QEMU on x86_64 (BIOS and UEFI) and arm64 (emulated), and on a cloud instance. |
 | Verified, read-only system slots (dm-verity) | Not built | Slots are plain writable ext4 today. |
 | Update key rotation | Not built | One signing key. |
 | Rollback protection | Preview | `box-update` refuses an older build unless you pass `--allow-older`. Nothing stops an older signed image installed with that flag. |
@@ -72,9 +72,6 @@ intended. **Not built** means a known gap with no plan yet; it is listed so you 
 |---|---|
 | A Find window in the portal | Planned |
 | A hosted vision model for Find on boxes without a GPU | Planned |
-| Payments through a custodial wallet, so no private key is on the box | Planned |
-| Signed calls from the Jira panel to the box, instead of one shared secret | Planned |
-| Guests in the ASI:One chat, with the owner approving their requests | Planned |
 
 ## Related
 

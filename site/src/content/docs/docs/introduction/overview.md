@@ -16,7 +16,7 @@ can undo any single task.
 | **The OS, in three editions** | [GurtOS Server](/docs/get-started/install-server/) for an always-on box, [GurtOS Personal](/docs/get-started/install-personal/) for your own computer, and GurtOS Business for a company's agents. See [Editions](/docs/introduction/editions/). | All three: Preview. Business is turned on from Server or Personal |
 | **The portal and phone app** | One web app on the box's own screen, in a browser and on your phone. A phone can install it to its home screen. It shows tasks, their steps and diffs, and the requests waiting for you. | Preview |
 | **Remote access** | Reach your box from your phone when you are away from its network. Use a private network such as Tailscale or WireGuard, or a relay you run yourself ([Run your own relay](/docs/guides/self-host/)). A hosted relay is not running during the preview. | Preview. Works with a private network or your own relay |
-| **An app platform** | Apps add tools, triggers, windows and log readers through a small [app SDK](/docs/reference/app-sdk/). The example app shows every slot. Optional apps such as Jira, Elastic, Apify and a test-money wallet connect the same way and need that service's account. See [Apps](/docs/reference/apps/). | Preview |
+| **An app platform** | Apps add tools, triggers, windows and log readers through a small [app SDK](/docs/reference/app-sdk/). The example app shows every slot. Apps that reach outside services connect the same way and need that service's account. See [Apps](/docs/reference/apps/). | Preview |
 | **Docs and open source** | These docs, and the [source code](https://github.com/benz16107/gurtos) under the Apache License 2.0. | Public |
 
 ## GurtOS and "the box"
@@ -123,7 +123,7 @@ can do the same things the portal does.
 
 - **Not a sandbox for hostile code you run yourself.** GurtOS limits agents' tasks. Apps you install on the box run
   inside the core, as root. Install only apps you trust. See the [threat model](/docs/security/threat-model/).
-- **Not a finished product.** GurtOS started at [Cal Hacks 13.0](https://calhacks.gurtos.com) in October 2026 and is
+- **Not a finished product.** GurtOS began as a weekend project in October 2026 and is
   an early preview. Some features on these pages are marked **Planned**.
 - **Not tied to one machine.** GurtOS Server runs on a small PC, a virtual machine or a cloud instance.
 

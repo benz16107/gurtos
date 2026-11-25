@@ -45,7 +45,7 @@ Anyone else gets `401` and nothing is read, started, approved or undone. These s
 - The work-account sign-in: `GET /api/sso`, `GET /api/sso/start`, `GET /api/sso/callback` and `POST /api/sso/redeem`.
 - The portal's own pages and assets, which hold nothing private.
 
-App routes and webhooks need a token too, except routes an app lists in `openRoutes`. A few apps do (Mana, Jira, Apify, Receipts, and Wallet's sell routes). Each checks its own secret, and the owner can turn that off per app in Settings, Permissions.
+App routes and webhooks need a token too, except routes an app lists in `openRoutes`. A few apps do (Receipts, for example). Each checks its own secret, and the owner can turn that off per app in Settings, Permissions.
 
 These routes are the **owner's**. Any other caller gets `403`:
 
@@ -113,7 +113,7 @@ The box serves the built portal from `portal/dist` (or the folder in `BOX_PORTAL
 
 ## App routes
 
-An app's routes are served at `/t/<app>/<path>`. For example, the wallet app's page is `/t/wallet/` and the shopper's store is `/t/shopper/store`. The box tells the route who is calling in an `x-box-caller` header that the caller cannot set: `screen`, `owner`, `device:<id>`, `service` (a helper on the box) or `none` (an open route reached with no token). `GET /api/apps` lists the windows of the apps that are on; `GET /api/apps?all=1` lists every installed app, on or off. See [Apps and slots](/docs/concepts/apps-and-slots/).
+An app's routes are served at `/t/<app>/<path>`. For example, the Find app's page is `/t/find/`. The box tells the route who is calling in an `x-box-caller` header that the caller cannot set: `screen`, `owner`, `device:<id>`, `service` (a helper on the box) or `none` (an open route reached with no token). `GET /api/apps` lists the windows of the apps that are on; `GET /api/apps?all=1` lists every installed app, on or off. See [Apps and slots](/docs/concepts/apps-and-slots/).
 
 ### App pages are sandboxed
 
@@ -224,7 +224,7 @@ A phone pairs once and gets its own device token:
 
 Wrong codes are limited to 5 a minute from one address and 60 a minute overall, then `429`. The address is the one a proxy on the box put last in `X-Forwarded-For`.
 
-An `iphone` device can ask for a separate token for its Apple Watch with `POST /api/devices/self/watch`. The Watch token is never the owner's. It approves only up to Settings `watchLimitCents`, never a Business or Shopper request, and may always deny.
+An `iphone` device can ask for a separate token for its Apple Watch with `POST /api/devices/self/watch`. The Watch token is never the owner's. It approves only up to Settings `watchLimitCents`, never a Business request, and may always deny.
 
 The older names `POST /api/pair/new`, `GET /api/pair/devices` and `POST /api/pair/devices/<id>/revoke` still work. A `GET /pair` is a portal page, not an API route.
 

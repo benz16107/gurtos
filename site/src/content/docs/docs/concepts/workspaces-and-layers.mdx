@@ -48,7 +48,7 @@ Once no running task still reads the undone layer, the core deletes it from disk
 
 ### What undo does not do
 
-Undo removes file changes. It cannot recall what a task already sent out of the box: a payment, an email, a message to an API. Those calls are in the log so you can follow up. Some apps reverse their own effects when a task is undone. For example, undoing a purchase from the shopping agent refunds its order, which is a test order in the preview. See [undo a task](/docs/guides/undo-a-task/).
+Undo removes file changes. It cannot recall what a task already sent out of the box: a payment, an email, a message to an API. Those calls are in the log so you can follow up. See [undo a task](/docs/guides/undo-a-task/).
 
 ### Layers built on other layers
 

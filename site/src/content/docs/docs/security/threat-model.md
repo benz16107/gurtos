@@ -52,7 +52,7 @@ These are known limits of the current release. Some are planned work; see the [r
 
 - **Root on the box.** The core runs as root and holds every key. Anyone who gets root, through a kernel bug, a bug in the core, or physical access, gets everything.
 - **Installed apps.** An app runs inside the core, as root. The `secrets` list limits what `box.secret()` returns, but app code can read the vault file directly. Install only apps you trust as much as the core. An app's page runs sandboxed in the browser, with a token for that app's routes only. A bug in it can't use the owner's controls, and it answers only its own app's requests.
-- **Tools extend a task's reach.** A tool runs in the core, outside the task's network limits. A task that may call `apify.run` (from the optional Apify app) can have Apify fetch any URL. Give a task only the tools it needs.
+- **Tools extend a task's reach.** A tool runs in the core, outside the task's network limits. A task that may call a tool that fetches URLs for it can fetch any URL. Give a task only the tools it needs.
 
 ### Access to the box's services
 
@@ -75,7 +75,7 @@ These are known limits of the current release. Some are planned work; see the [r
 - **Pushes and a shared subscription.** One box sharing a phone's push subscription cannot pose as another: the app
   drops a push whose signature does not match that box's key. The relay can drop or delay pushes and connections,
   but cannot read them.
-- **Webhooks and app routes** accept any paired device's token. An app can also mark routes as open (`openRoutes`), with no token at all, for a route that is public on purpose or checks its own secret. Mana (7 routes), Jira (8), Apify (`POST /watch`), Receipts (4) and Wallet's sell routes are open. An open route is only as safe as its own check. The owner can refuse these requests per app in the app's permissions.
+- **Webhooks and app routes** accept any paired device's token. An app can also mark routes as open (`openRoutes`), with no token at all, for a route that is public on purpose or checks its own secret. Receipts (4 routes) is open. An open route is only as safe as its own check. The owner can refuse these requests per app in the app's permissions.
 
 ### Data that leaves on purpose
 
@@ -91,7 +91,7 @@ These are known limits of the current release. Some are planned work; see the [r
 - **An agent writes its own questions.** A question a task asks with `box_ask` is the agent's text. Read it as a claim, not a fact. Budget approvals are written by the core from the tool's declared cost. A task's own questions have their own ids, and are shown as plain text, at most 2,000 characters with no direction-override characters. Answering approvals through the MCP server is off unless `BOX_MCP_ANSWER=on`.
 - **No time limit per task.** A task can use up to two CPU cores and run until it ends or is undone.
 - **Shared kernel.** Tasks are separated by Linux users, systemd and overlayfs, not by virtual machines. A kernel exploit inside a task escapes all of them.
-- **Shared network space.** Every task shares the machine's network namespace, so two tasks can talk through an abstract Unix socket and pool what their separate host lists reach, and a task sees the sockets other tasks have open in `/proc/net`. The [attack scoreboard](https://github.com/benz16107/gurtos/blob/main/tracks/armadin/SCOREBOARD.md) lists these as not covered.
+- **Shared network space.** Every task shares the machine's network namespace, so two tasks can talk through an abstract Unix socket and pool what their separate host lists reach, and a task sees the sockets other tasks have open in `/proc/net`. The [attack scoreboard](https://github.com/benz16107/gurtos/blob/main/tracks/attacks/SCOREBOARD.md) lists these as not covered.
 - **Side channels** between tasks on the same machine, such as timing or cache effects, are not addressed.
 - **The log is not signed.** Each line carries the hash of the line before it (`prev`), so an edit in the middle shows. Nothing signs the log, so root can rewrite the whole chain.
 - **Denial of service.** A task's copy is capped at 5 GB by a check every 2 seconds and once more when the task ends, so a fast writer can pass it for a moment. The check measures the copy, the task's home and its `/tmp`; `/dev/shm` is the task's own, in its memory. A task that runs a fork bomb up to its 512-process limit can slow other tasks for as long as it runs. The owner can undo it. Request bodies are capped at 10 MB, or 1 MB without a token. A task writes at most 20 MB to the log (64 KB per step, refused requests counted) and holds at most 256 proxy connections. Nothing limits how many tasks or approvals a caller of the API can create.

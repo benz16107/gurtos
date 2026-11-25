@@ -585,7 +585,7 @@ paths:
         one made from Droid's own question.
 
         An Apple Watch token may approve only up to Settings `watchLimitCents`, never on a Business box,
-        never a Shopper purchase, and only with `auth: wrist`. Otherwise the answer is 403 with
+        not a purchase made with a passkey, and only with `auth: wrist`. Otherwise the answer is 403 with
         `needs: iphone` and the request keeps waiting. A Watch may always deny. On a GurtOS Business box
         only a person answers, never their own request, only what the policy sends to them and only within
         their limit. A refusal is 403 with the reason, and the request keeps waiting.
@@ -2553,7 +2553,7 @@ components:
           type: array
           items: { type: string }
           default: []
-          description: Tool names the task may call through its broker, such as `wallet.pay`.
+          description: Tool names the task may call through its broker, such as `example.spend`.
         hosts:
           type: array
           items: { type: string }
