@@ -643,7 +643,9 @@ class Core {
     const def = typeof s.worker === 'string' && Object.hasOwn(WORKERS, s.worker) ? WORKERS[s.worker] : undefined;
     if (!def) throw new Error(`no worker ${String(s.worker).slice(0, 40)} (known: ${Object.keys(WORKERS).join(', ')})`);
     if (s.droid !== undefined && def.name !== 'droid' && def.name !== 'fake') throw new Error(`droid: plan and autonomy are Droid's own options; ${def.title} has none`);
-    delete s.model; // a scripted worker runs no model
+    // A scripted worker runs no model, but a name that could never be one is still refused at the door.
+    if (!def.upstreams.length && spec.model != null && spec.model !== '' && (typeof spec.model !== 'string' || !/^[\w.:@/-]{1,100}$/.test(spec.model))) throw new Error('model: a model id, like sonnet, claude-sonnet-5-5 or ollama/qwen3');
+    delete s.model;
     if (def.upstreams.length) {
       // The task records the exact model it ran on, the default too. With no model service set up yet the name is
       // still checked (against the agent's first one), and the task fails when it starts, with the reason.
@@ -804,19 +806,25 @@ class Core {
   agentState(def: WorkerDef, install = true): { state: string; message: string } {
     if (def.name === 'droid') return system.droidState();
     if (!def.pkg || fs.existsSync(agentBin(def))) return { state: 'ready', message: `${def.title} is ready.` };
+    // A failed install fails the task that waited for it, with the reason. The next task tries again.
     const failed = this.installFailed.get(def.name);
-    if (failed && !install) return { state: 'missing', message: failed };
+    if (failed) {
+      if (install) this.installFailed.delete(def.name);
+      return { state: 'missing', message: failed };
+    }
     if (!this.installing.has(def.name)) {
       if (!install) return { state: 'absent', message: `${def.title} is installed the first time a task uses it.` };
       this.installing.add(def.name);
-      this.installFailed.delete(def.name);
       const dir = path.join(agentsDir(), def.name);
       fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
       const out = fs.openSync(path.join(dir, 'install.log'), 'a');
       // As root, outside any task: the package is the vendor's own, pinned to one version. Tasks only run it.
       // shortcut: pinned by version, not by checksum; add an integrity hash per package if npm's own check is not enough.
       const npm = spawn('npm', ['install', '--prefix', dir, '--no-audit', '--no-fund', '--no-update-notifier', '--loglevel=error', def.pkg], { stdio: ['ignore', out, out], env: { ...process.env, PATH: `${path.dirname(process.execPath)}:${process.env.PATH ?? '/usr/bin:/bin'}` } });
+      let over = false; // a command that could not start reports twice
       const ended = (ok: boolean) => {
+        if (over) return;
+        over = true;
         fs.closeSync(out);
         this.installing.delete(def.name);
         if (!ok || !fs.existsSync(agentBin(def))) this.installFailed.set(def.name, `${def.title} could not be installed (npm install ${def.pkg} failed; see ${path.join(dir, 'install.log')}). Check this computer's internet connection, then start the task again.`);

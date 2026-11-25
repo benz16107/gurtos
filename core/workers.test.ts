@@ -77,6 +77,8 @@ test('a model is checked for the agent and the service it runs on', () => {
   assert.deepEqual(splitModel('meta/llama'), { model: 'meta/llama' }, 'not an upstream: part of the model id');
   assert.deepEqual(plan(WORKERS.droid, undefined, (u) => u === 'anthropic'), { upstream: 'anthropic', model: 'claude-sonnet-5-5' });
   assert.deepEqual(plan(WORKERS.droid, 'opus', all), { upstream: 'factory', model: 'claude-opus-5-5' });
+  assert.deepEqual(plan(WORKERS.droid, null as never, all), plan(WORKERS.droid, '', all), 'no model named, however it is spelled');
+  assert.throws(() => plan(WORKERS.claude, 7 as never, all), /model: text/);
   assert.throws(() => plan(WORKERS.droid, 'gpt-5', all), /model: haiku, sonnet, opus/);
   assert.deepEqual(plan(WORKERS.claude, 'haiku', all), { upstream: 'anthropic', model: 'claude-haiku-5-5' });
   assert.throws(() => plan(WORKERS.claude, 'gpt-5', all), /Anthropic runs Claude models/);

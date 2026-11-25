@@ -224,6 +224,7 @@ export function splitModel(asked?: string): { upstream?: string; model?: string 
  * Throws a plain sentence when the task cannot run.
  */
 export function plan(def: WorkerDef, asked: string | undefined, usable: (upstream: string) => boolean): { upstream: string; model?: string } {
+  if (asked === null || asked === '') asked = undefined; // none named
   if (asked !== undefined && typeof asked !== 'string') throw new Error('model: text, like sonnet or ollama/qwen3');
   const want = splitModel(asked);
   if (want.upstream && !def.upstreams.includes(want.upstream)) throw new Error(`model: ${def.title} cannot use ${UPSTREAMS[want.upstream].title}. It can use: ${def.upstreams.join(', ')}.`);
