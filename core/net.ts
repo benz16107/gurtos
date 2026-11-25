@@ -193,10 +193,16 @@ export function relayCert(home: string) {
   return { key: fs.readFileSync(path.join(dir, 'leaf.key')), cert: fs.readFileSync(path.join(dir, 'leaf.pem')), caPem };
 }
 
-/** The uid that owns the other end of a loopback connection, from /proc/net/tcp (or tcp6 for ::1). */
+/**
+ * The uid that owns the other end of a loopback connection, from /proc/net/tcp (or tcp6 for ::1). A dual-stack
+ * listener (BOX_LISTEN=::) sees 127.0.0.1 as ::ffff:127.0.0.1, but the client's own socket is plain IPv4, in tcp.
+ */
+const LOOPBACK_HEX: Record<string, string> = { '127.0.0.1': '0100007F', '::ffff:127.0.0.1': '0100007F', '::1': '00000000000000000000000001000000' };
 export function uidOf(sock: net.Socket): number | undefined {
+  const addr = LOOPBACK_HEX[sock.remoteAddress ?? ''];
+  if (!addr) return undefined;
   const v6 = sock.remoteAddress === '::1';
-  const hex = (port: number) => `${v6 ? '00000000000000000000000001000000' : '0100007F'}:${port.toString(16).toUpperCase().padStart(4, '0')}`;
+  const hex = (port: number) => `${addr}:${port.toString(16).toUpperCase().padStart(4, '0')}`;
   const pair = ` ${hex(sock.remotePort ?? 0)} ${hex(sock.localPort ?? 0)} `; // the client's line: its local address, then the box's
   // Searched, not split into lines: a task holding many connections makes the table long, and this runs for each one.
   const table = fs.readFileSync(v6 ? '/proc/net/tcp6' : '/proc/net/tcp', 'utf8');
@@ -411,6 +417,8 @@ export interface ProxyHooks {
   key(name: string): string | undefined;
   /** The owner's settings that say where Ollama and their own endpoint are. */
   config(): UpstreamConfig;
+  /** The one model service this task was started with (start() picks it), or none for a scripted task. */
+  upstream(task: Task): string | undefined;
 }
 
 /** One model call on its way out: where it goes, which paths go, which are read first, and its headers with the key in. */
@@ -463,12 +471,15 @@ export async function startProxy(hooks: ProxyHooks, cert: { key: Buffer; cert: B
     toModel(req, res, req.url ?? '/', { origin: `https://${host}`, paths: anthropic ? anthropicPath : factoryPath, reads: (p) => anthropic || p.startsWith('/api/llm/'), headers, only: `the ${anthropic ? 'Anthropic' : 'Factory'} calls Droid makes` }, t);
   };
 
-  /** A call to /up/<id>/...: any agent's model call. The task's agent must be allowed that upstream, and it must be set up. */
+  /**
+   * A call to /up/<id>/...: any agent's model call. It must go to the one upstream the task was started with, so a
+   * task on a free local model cannot reach the owner's paid key, and that upstream must be set up.
+   */
   const toUpstream = (req: http.IncomingMessage, res: http.ServerResponse, id: string, rest: string, t: Task) => {
     const u = UPSTREAMS[id];
-    if (!u || id === 'factory' || !WORKERS[t.worker]?.upstreams.includes(id)) {
+    if (!u || id === 'factory' || !WORKERS[t.worker]?.upstreams.includes(id) || hooks.upstream(t) !== id) {
       hooks.blocked(t, `model service ${id}`.slice(0, 200));
-      return fail(res, 403, "blocked by the box: this task's agent may not use that model service");
+      return fail(res, 403, 'blocked by the box: this task may use only the model service it was started with');
     }
     const cfg = hooks.config();
     const origin = u.origin(cfg);

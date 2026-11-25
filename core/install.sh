@@ -21,6 +21,8 @@ rsync -a --delete --exclude node_modules --exclude screenshots \
 [ -f /etc/box/vault.env ] || install -m 600 /dev/null /etc/box/vault.env
 # Members act as this computer's own screen from loopback, with the owner's rights (core/net.ts trustedUid).
 getent group gurtos >/dev/null || groupadd --system gurtos
+# The box's own screen on a Server image made before the group existed: without it, an update locks the screen out.
+if id kiosk >/dev/null 2>&1; then usermod -aG gurtos kiosk; fi
 
 cat > /etc/systemd/system/box.service <<'UNIT'
 [Unit]

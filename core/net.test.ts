@@ -117,7 +117,7 @@ test('the proxy reads every model call: no compressed or non-JSON body, at most 
   const blocked: string[] = [];
   const task = { id: 'tproxytest', worker: 'droid', hosts: [] } as unknown as Task;
   const port = await startProxy(
-    { taskOf: () => task, blocked: (_t, host) => blocked.push(host), leaked: () => false, key: (name) => (name === 'FACTORY_API_KEY' ? 'fk-real' : undefined), config: () => ({ ollamaHost: '', customBaseUrl: '', customWire: 'anthropic' }) },
+    { taskOf: () => task, blocked: (_t, host) => blocked.push(host), leaked: () => false, key: (name) => (name === 'FACTORY_API_KEY' ? 'fk-real' : undefined), config: () => ({ ollamaHost: '', customBaseUrl: '', customWire: 'anthropic' }), upstream: () => undefined },
     { key: Buffer.from(''), cert: Buffer.from('') },
   );
   // A plain path is Droid's Factory API (FACTORY_API_BASE_URL); its model calls are read before they go on.
@@ -191,6 +191,18 @@ test('a connection over ::1 is matched to its account in /proc/net/tcp6', async 
   server.close();
 });
 
+test('127.0.0.1 reaching a dual-stack listener (::ffff:127.0.0.1) is matched to its account too', async (t) => {
+  const server = net.createServer();
+  const ok = await new Promise<boolean>((r) => server.once('error', () => r(false)).listen({ port: 0, host: '::', ipv6Only: false }, () => r(true)));
+  if (!ok) return t.skip('no IPv6 here');
+  const port = (server.address() as net.AddressInfo).port;
+  const seen = new Promise<[string | undefined, number | undefined]>((r) => server.once('connection', (sock) => r([sock.remoteAddress, uidOf(sock)])));
+  const c = net.connect(port, '127.0.0.1');
+  assert.deepEqual(await seen, ['::ffff:127.0.0.1', process.getuid!()]);
+  c.destroy();
+  server.close();
+});
+
 test("a web search or fetch the model service would run from its side is refused, unless it is held to hosts the task may reach", () => {
   const call = (tool: object) => ({ model: 'm', messages: [{ role: 'user', content: 'hi' }], tools: [{ name: 'Bash', input_schema: {} }, tool] });
   // Anthropic's server tools, as Claude Code's WebSearch sends them.
@@ -252,7 +264,8 @@ test("the proxy relays an agent's model calls: the vault key goes on, the placeh
   const blocked: string[] = [];
   let task = { id: 'tup', worker: 'claude', hosts: ['docs.example.com'] } as unknown as Task;
   let cfg = { ollamaHost: '', customBaseUrl: at, customWire: 'anthropic' as 'anthropic' | 'openai' };
-  const port = await startProxy({ taskOf: () => task, blocked: (_t, host) => blocked.push(host), leaked: () => false, key: (name) => (name === 'CUSTOM_API_KEY' ? 'gw-real-key' : undefined), config: () => cfg }, { key: Buffer.from(''), cert: Buffer.from('') });
+  let planned = 'custom'; // the upstream the task was started with
+  const port = await startProxy({ taskOf: () => task, blocked: (_t, host) => blocked.push(host), leaked: () => false, key: (name) => (name === 'CUSTOM_API_KEY' ? 'gw-real-key' : undefined), config: () => cfg, upstream: () => planned }, { key: Buffer.from(''), cert: Buffer.from('') });
   const send = (path: string, body?: object, method = body ? 'POST' : 'GET') =>
     new Promise<{ status: number; text: string }>((resolve) => {
       const req = http.request({ host: '127.0.0.1', port, path, method, headers: { 'x-api-key': BOX_PLACEHOLDER, authorization: `Bearer ${BOX_PLACEHOLDER}`, 'content-type': 'application/json' } });
@@ -288,8 +301,12 @@ test("the proxy relays an agent's model calls: the vault key goes on, the placeh
     assert.equal((await send('/up/openai/v1/responses', { model: 'm', input: 'hi' })).status, 403, 'Claude Code has no business at OpenAI');
     assert.equal((await send('/up/factory/v1/messages', msg)).status, 403);
     assert.equal((await send('/up/nowhere/v1/messages', msg)).status, 403);
-    assert.equal((await send('/up/anthropic/v1/messages', msg)).status, 503, 'allowed, but the vault has no Anthropic key');
-    assert.equal((await send('/up/ollama/v1/messages', msg)).status, 503, 'allowed, but no Ollama address is set');
+    assert.equal((await send('/up/anthropic/v1/messages', msg)).status, 403, 'its agent could use Anthropic, but this task was started on the custom endpoint');
+    planned = 'anthropic';
+    assert.equal((await send('/up/anthropic/v1/messages', msg)).status, 503, 'started there, but the vault has no Anthropic key');
+    planned = 'ollama';
+    assert.equal((await send('/up/ollama/v1/messages', msg)).status, 503, 'started there, but no Ollama address is set');
+    planned = 'custom';
     task = { ...task, worker: 'fake' } as Task;
     assert.equal((await send('/up/custom/v1/messages', msg)).status, 403, 'a scripted task has no model service');
     assert.equal(got.length, 2, 'none of the refused calls reached the service');
@@ -303,6 +320,7 @@ test("the proxy relays an agent's model calls: the vault key goes on, the placeh
     assert.equal((await send('/up/custom/v1/models')).status, 200);
     // A local model: no key at all goes on.
     cfg = { ...cfg, ollamaHost: at.replace('/gateway', '') };
+    planned = 'ollama';
     assert.equal((await send('/up/ollama/v1/chat/completions', { model: 'qwen3', messages: [] })).status, 200);
     const local = got.at(-1)!;
     assert.ok(local.headers.authorization === undefined && local.headers['x-api-key'] === undefined && local.url === '/v1/chat/completions');

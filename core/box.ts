@@ -34,6 +34,8 @@ type Handler = (method: string, url: URL, body: any, headers: http.IncomingHttpH
 const MAX_BODY = 10 * 1024 ** 2;
 /** For routes anyone may call without a token: pairing, the work-account sign-in, a track's open routes. */
 const MAX_OPEN_BODY = 1024 ** 2;
+/** The account an agent's npm install runs as: it cannot read the vault, and owns nothing else the box keeps. */
+const NOBODY = 65534;
 
 /** Read a request's body, at most `limit` bytes: past that it is a 413, and the connection closes after the answer. */
 async function readBody(req: http.IncomingMessage, res: http.ServerResponse, limit = MAX_BODY, count?: (bytes: number) => void) {
@@ -239,6 +241,8 @@ class Core {
   linksPath = path.join(HOME, 'links.json');
   links: Record<string, string | Record<string, string>> = fs.existsSync(this.linksPath) ? JSON.parse(fs.readFileSync(this.linksPath, 'utf8')) : {};
   uidTask = new Map<number, string>();
+  /** The upstream each started task's model calls may go to (the proxy refuses the others). */
+  taskUpstream = new Map<string, string>();
   relay = relayCert(HOME);
   proxyPort = 0;
   live = new Live({
@@ -416,7 +420,7 @@ class Core {
   /** What's still missing before this computer is ready. */
   doctor() {
     const missing: { id: string; text: string }[] = [];
-    if (!this.modelVia()) missing.push({ id: 'key', text: 'No model key yet: set ANTHROPIC_API_KEY or FACTORY_API_KEY.' });
+    if (!this.modelVia()) missing.push({ id: 'key', text: 'No model service yet: add an Anthropic, OpenAI or Factory key, a local model through Ollama, or your own endpoint in Settings, Agents & Models.' });
     const droid = system.droidState(); // still downloading on a new image is fine: tasks wait for it
     if (droid.state === 'missing' && this.defaultAgent() === 'droid') missing.push({ id: 'droid', text: droid.message });
     if (system.edition(this.owner, this.business.on) === 'personal' && !this.owner) missing.push({ id: 'owner', text: 'No owner yet.' });
@@ -695,6 +699,7 @@ class Core {
       if (def.upstreams.length) {
         if (!def.upstreams.some((u) => this.usable(def, u))) this.vault = loadVault(); // a key added to the file by hand since boot
         via = plan(def, t.model, (u) => this.usable(def, u));
+        this.taskUpstream.set(t.id, via.upstream);
         // An agent's command is fetched after the box starts (Droid by the image, its license forbids shipping it; the
         // others by the box the first time a task needs them): a task waits for it.
         const agent = this.agentState(def);
@@ -805,7 +810,8 @@ class Core {
   installFailed = new Map<string, string>();
   agentState(def: WorkerDef, install = true): { state: string; message: string } {
     if (def.name === 'droid') return system.droidState();
-    if (!def.pkg || fs.existsSync(agentBin(def))) return { state: 'ready', message: `${def.title} is ready.` };
+    // Its command appears before its install scripts finish, so a running install is never ready.
+    if (!def.pkg || (!this.installing.has(def.name) && fs.existsSync(agentBin(def)))) return { state: 'ready', message: `${def.title} is ready.` };
     // A failed install fails the task that waited for it, with the reason. The next task tries again.
     const failed = this.installFailed.get(def.name);
     if (failed) {
@@ -814,18 +820,35 @@ class Core {
     }
     if (!this.installing.has(def.name)) {
       if (!install) return { state: 'absent', message: `${def.title} is installed the first time a task uses it.` };
-      this.installing.add(def.name);
       const dir = path.join(agentsDir(), def.name);
       fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
       const out = fs.openSync(path.join(dir, 'install.log'), 'a');
-      // As root, outside any task: the package is the vendor's own, pinned to one version. Tasks only run it.
-      // shortcut: pinned by version, not by checksum; add an integrity hash per package if npm's own check is not enough.
-      const npm = spawn('npm', ['install', '--prefix', dir, '--no-audit', '--no-fund', '--no-update-notifier', '--loglevel=error', def.pkg], { stdio: ['ignore', out, out], env: { ...process.env, PATH: `${path.dirname(process.execPath)}:${process.env.PATH ?? '/usr/bin:/bin'}` } });
+      // Claude Code and opencode need their install scripts, and any dependency's script runs too. So npm runs as
+      // nobody, who cannot read the vault, and the folder goes back to root once it is done. Tasks only run it.
+      // shortcut: pinned by version, not by checksum, and dependencies are not locked; ship a lockfile per agent to fix both.
+      const asRoot = process.getuid?.() === 0;
+      if (asRoot) fs.chownSync(dir, NOBODY, NOBODY);
+      this.installing.add(def.name); // only once its log is open: a throw above fails this task, and the next one tries again
+      const npm = spawn('npm', ['install', '--prefix', dir, '--no-audit', '--no-fund', '--no-update-notifier', '--loglevel=error', def.pkg], {
+        stdio: ['ignore', out, out],
+        cwd: dir,
+        ...(asRoot ? { uid: NOBODY, gid: NOBODY } : {}),
+        env: { ...process.env, HOME: dir, npm_config_cache: path.join(dir, '.npm'), PATH: `${path.dirname(process.execPath)}:${process.env.PATH ?? '/usr/bin:/bin'}` },
+      });
       let over = false; // a command that could not start reports twice
       const ended = (ok: boolean) => {
         if (over) return;
         over = true;
         fs.closeSync(out);
+        fs.rmSync(path.join(dir, '.npm'), { recursive: true, force: true });
+        if (asRoot) {
+          try {
+            execFileSync('chown', ['-R', '--no-dereference', '0:0', dir]);
+          } catch (e) {
+            ok = false; // an agent nobody could still change is not used
+            console.error(`agent install: could not give ${dir} back to root: ${(e as Error).message}`);
+          }
+        }
         this.installing.delete(def.name);
         if (!ok || !fs.existsSync(agentBin(def))) this.installFailed.set(def.name, `${def.title} could not be installed (npm install ${def.pkg} failed; see ${path.join(dir, 'install.log')}). Check this computer's internet connection, then start the task again.`);
       };
@@ -844,11 +867,12 @@ class Core {
       this.write({ type: 'task.step', task: t.id, text: message }); // what the task list shows while it waits
     }
     this.droidTimer ??= setInterval(() => {
-      // Each task whose agent is here now, or could not be fetched, starts again: start() runs it or fails it with the reason.
+      // Each task whose agent is here now, or could not be fetched, starts again: start() runs it or fails it with the
+      // reason. 'absent' means another waiting task already took the failure, so this one's start() tries the install again.
       for (const id of [...this.droidWaiting]) {
         const w = this.state.tasks.get(id);
         const live = w && (w.state === 'queued' || w.state === 'running' || w.state === 'waiting');
-        if (live && !['ready', 'missing'].includes(this.agentState(WORKERS[w.worker], false).state)) continue;
+        if (live && !['ready', 'missing', 'absent'].includes(this.agentState(WORKERS[w.worker], false).state)) continue;
         this.droidWaiting.delete(id);
         if (live) void this.start(w);
       }
@@ -867,6 +891,7 @@ class Core {
     stopLoggingBlocked(t.id);
     this.brokers.get(t.id)?.close();
     this.brokers.delete(t.id);
+    this.taskUpstream.delete(t.id);
     sandbox.seal(t);
     if ((t.state === 'done' || t.state === 'undone') && !sandbox.isLinked(t.workspace)) this.refreshView(t.workspace);
     this.sweepUndone();
@@ -1935,6 +1960,7 @@ class Core {
       writeJson(this.ownerPath, { user, setAt: new Date().toISOString() });
       this.owner = user;
     }
+    this.trustedPeers = new WeakMap(); // an open connection from the old owner's account stops counting as the owner
     this.write({ type: 'note', track: 'owner', data: { owner: this.owner } });
     return this.ownerInfo();
   }
@@ -2943,6 +2969,7 @@ data: ${JSON.stringify(e)}
       },
       key: (name) => this.vault.get(name),
       config: () => this.settings,
+      upstream: (t) => this.taskUpstream.get(t.id),
     }, this.relay);
     try {
       firewall(this.proxyPort); // once the proxy listens: its port is the one tasks may reach
