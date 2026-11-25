@@ -136,6 +136,7 @@ export const WORKERS: Record<string, WorkerDef> = {
           ...(o.model ? [`model = ${q(o.model)}`] : []),
           'model_provider = "box"',
           'web_search = "disabled"', // OpenAI would search from its side, around the task's host list
+          'check_for_update_on_startup = false', // the proxy would refuse it
           '',
           '[model_providers.box]',
           'name = "GurtOS"',

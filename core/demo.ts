@@ -401,6 +401,7 @@ for (const [agent, title, wire, own] of [['claude', 'Claude Code', 'anthropic', 
       ? undefined
       : async () => {
           if (custom) await api('PATCH', '/api/settings', { customBaseUrl: liveVault.CUSTOM_BASE_URL, customWire: wire });
+          if (custom && liveVault.CUSTOM_API_KEY) await api('PUT', '/api/vault/CUSTOM_API_KEY', { value: liveVault.CUSTOM_API_KEY }); // the step above put its own test key there
           const name = liveVault.DEMO_LIVE_MODEL ?? (agent === 'claude' ? 'haiku' : undefined);
           workspace(`live-${agent}`, { 'notes.md': '# Notes\n' });
           const T = await api<Task>('POST', '/tasks', { title: `${title} adds a note`, workspace: `live-${agent}`, agent, ...(custom ? { model: `custom/${name ?? 'gpt-5'}` } : name ? { model: name } : {}), source: 'demo', tools: ['example.spend'], budgetCents: 100, prompt: `Append the line "${title} was here." to notes.md. Then buy one coffee for 50 cents with the example spend tool from the box MCP server (on: coffee). Do nothing else.` });
@@ -411,7 +412,8 @@ for (const [agent, title, wire, own] of [['claude', 'Claude Code', 'anthropic', 
           check(events.filter((e) => e.type === 'task.step').length >= 2, `its steps are in the action log (${events.filter((e) => e.type === 'task.step').length})`);
           check(events.some((e) => e.type === 'tool.result' && e.ok), 'it used a box tool through the broker');
           const seen = [...sample.envs, fs.readFileSync(path.join(HOME, 'tasks', T.id, 'worker.log'), 'utf8'), JSON.stringify(events)].join('\n');
-          check(sample.envs.length > 0 && !secrets.some((v) => seen.includes(v)), `no vault value was in any of ${sample.envs.length} process samples, the worker's output or the log`);
+          const plain = [liveVault.CUSTOM_BASE_URL, liveVault.DEMO_LIVE_MODEL, liveVault.CUSTOM_WIRE]; // settings for this step, not secrets
+          check(sample.envs.length > 0 && !secrets.some((v) => !plain.includes(v) && seen.includes(v)), `no vault value was in any of ${sample.envs.length} process samples, the worker's output or the log`);
           const cost = events.find((e) => e.type === 'cost' && e.model);
           check(cost?.type === 'cost' && (cost.tokens?.output ?? 0) > 0, `its token counts are logged ($${(t.costCents / 100).toFixed(4)} with the 50 cent test spend)`);
           await api('POST', `/tasks/${T.id}/undo`);
