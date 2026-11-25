@@ -2,7 +2,7 @@
 //   <link rel="stylesheet" href="/kit/gurtos.css"> <script type="module" src="/kit/gurtos.js"></script>
 // Then use the g-* classes on plain HTML (portal/KIT.md) and these elements:
 //   <g-icon name="system-search"></g-icon>          an Adwaita symbolic icon, 16 px, in the text color
-//   <g-app-icon app="shopper" size="44"></g-app-icon>  a GurtOS app icon
+//   <g-app-icon app="find" size="44"></g-app-icon>  a GurtOS app icon
 //   gurtos.toast('Saved')                            a toast at the bottom of the page
 // Inside a GurtOS window the page follows the desktop's light or dark style by itself, and off the box's own screen
 // its fetches, log streams and links carry the device's pairing token (the box answers 401 without it).
@@ -10,17 +10,13 @@ import './kit.css';
 import { ICONS } from './icons.ts';
 import activity from './apps/activity.svg';
 import appCenter from './apps/app-center.svg';
-import asiOne from './apps/asi-one.svg';
 import creditDesk from './apps/credit-desk.svg';
 import find from './apps/find.svg';
-import jira from './apps/jira.svg';
 import settings from './apps/settings.svg';
-import shopper from './apps/shopper.svg';
 import tasks from './apps/tasks.svg';
 import timeMachine from './apps/time-machine.svg';
-import wallet from './apps/wallet.svg';
 
-const GLYPHS: Record<string, string> = { tasks, activity, 'time-machine': timeMachine, settings, 'app-center': appCenter, 'credit-desk': creditDesk, shopper, wallet, find, jira, fetch: asiOne, 'asi-one': asiOne };
+const GLYPHS: Record<string, string> = { tasks, activity, 'time-machine': timeMachine, settings, 'app-center': appCenter, 'credit-desk': creditDesk, find };
 
 class GIcon extends HTMLElement {
   static observedAttributes = ['name', 'label', 'size'];
@@ -55,7 +51,7 @@ class GAppIcon extends HTMLElement {
     span.className = 'g-app-icon';
     span.setAttribute('aria-hidden', 'true');
     span.style.setProperty('--size', `${size}px`);
-    span.style.setProperty('--tile', glyph ? `var(--color-app-${app === 'fetch' ? 'asi-one' : app})` : 'var(--color-app-other)');
+    span.style.setProperty('--tile', glyph ? `var(--color-app-${app})` : 'var(--color-app-other)');
     if (glyph) {
       const img = document.createElement('img');
       img.src = glyph;

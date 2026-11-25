@@ -48,7 +48,7 @@ const ALL_PAGES: (Page | 'sep' | 'company')[] = [
 const pageList = () => (box.business.on ? ALL_PAGES : ALL_PAGES.filter((p) => !COMPANY.includes(p)));
 const pagesNow = () => pageList().filter((p): p is Page => typeof p !== 'string');
 
-/** The app title without its note in brackets: "Shopper (test payments)" is Shopper. A track with no title of its own shows its id as words. */
+/** The app title without its note in brackets: "Find (beta)" is Find. A track with no title of its own shows its id as words. */
 export function appTitle(a: Pick<AppInfo, 'title' | 'id'>) {
   const t = a.title.replace(/\s*\(.*\)$/, '');
   return t === a.id ? t[0].toUpperCase() + t.slice(1).replace(/-/g, ' ') : t;
@@ -780,18 +780,11 @@ function Updates() {
 function Privacy() {
   const b = useBox();
   const set = useSet();
-  const toggle = useToggleApp();
   const s = b.settings;
   if (!s) return <Loading />;
   const ro = !b.owner;
   const days = String(s.logRetentionDays);
   const label = (d: number) => (d % 365 === 0 ? plural(d / 365, 'year') : plural(d, 'day'));
-  // Optional apps that send the log or task titles out. Listed here only while one is on, so it can be turned off.
-  const share = (id: string, title: string, sub: string) => {
-    const a = b.allApps.find((x) => x.id === id && x.status === 'enabled');
-    return a && <SwitchRow title={title} sub={sub} checked onChange={(v) => void toggle(a, v)} disabled={ro} />;
-  };
-  const sharing = [share('elastic', 'Copy the log to Elastic', 'With the Ask GurtOS app'), share('mana', 'Public status page', 'Mana status shows task titles and states, never prompts or files')].filter(Boolean);
   return (
     <>
       <Group title="The action log" caption="Every step every agent takes. It stays on this computer and holds no keys.">
@@ -814,8 +807,8 @@ function Privacy() {
           <Button onClick={() => open('activity')}>Open Activity</Button>
         </Row>
       </Group>
-      <Group title="Sharing" caption={sharing.length ? 'Turn one off and nothing more is sent.' : undefined}>
-        {sharing.length ? sharing : <Row icon="preferences-system-privacy" title="Nothing is shared" sub="The log and your tasks stay on this computer." />}
+      <Group title="Sharing">
+        <Row icon="preferences-system-privacy" title="Nothing is shared" sub="The log and your tasks stay on this computer." />
       </Group>
     </>
   );

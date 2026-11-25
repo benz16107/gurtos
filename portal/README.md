@@ -13,7 +13,7 @@ and Preact components in `src/kit/`. Track apps get the same kit at `/kit/gurtos
 see [KIT.md](KIT.md) and the live style guide at `/kit/index.html`.
 
 Every screen shows the box's real state: tasks and approvals from SpacetimeDB on the box's own screen, and the action
-log over Server-Sent Events everywhere. Money from a test app (Shopper, Agent wallet) is test money and says so.
+log over Server-Sent Events everywhere. Money from a test app is test money and says so.
 
 ## Figma and the real app
 
@@ -132,7 +132,7 @@ Differences from the frames, on purpose:
 - **Add a person** has no email field and says "Add", not "Add and invite": the box sends no email. It shows the
   person's pairing QR code right after adding them.
 - **Rules** are the box's policy lines with their values editable in place. The frame's "The Credit analyst may
-  approve up to $10,000 on its own" is the credit desk's own rules file, so it shows on People under Agent seats, not
+  approve up to $10,000 on its own" comes from an app's own rules file, so it shows on People under Agent seats, not
   as a box rule. "Remind Priya when the Controller hasn't answered" is left out: reminders aren't built.
 - **Who clears fraud flags** is a name in the rules ("Fraud referrals go to the fraud reviewer"), and "Can clear fraud
   flags" on a person adds them to it. Rosa is the only one.
@@ -144,7 +144,7 @@ Differences from the frames, on purpose:
 ## The four moments on screen
 
 1. **Undo one task.** Tasks, History and the task window each undo one task behind an alert: "Its files are
-   removed. Every other task keeps its own." A Shopper task's alert says its test payment is refunded.
+   removed. Every other task keeps its own." A task whose app reports an `undo` line says it too.
 2. **The booby-trapped page.** The task window opens with a red alert: what it tried to reach, the hosts it may
    reach, and that it never held a key. Each blocked step is red in the steps and in Activity.
 3. **A pause for your OK.** A request arrives as a banner on the desktop and on every paired phone at once. The
@@ -225,10 +225,8 @@ App Center, track windows, pairing), `src/kit/` (tokens, components, icons, app 
 - **For the core:** restart, power off and pause agents; joining Wi-Fi, renaming the box and setting its time zone
   (setup keeps those answers in the step's data only); `box-update` status and rollback over the API; the log's size
   and path; a screen passcode; a per-folder read or change mode.
-- **Track pages that need restyling to the kit** (their threads own them): Example (`/t/example/`), ASI:One
-  (`/t/fetch/`) and Agent wallet (`/t/wallet/`) are unstyled HTML; Shopper and GurtOS Test Store (`/t/shopper/`) use
-  their own look and draw their own title, which the window already shows. Figma has frames for each in
-  `docs/figma/os-v2/tracks/`. Loading `/kit/gurtos.js` also makes their own fetches carry the phone's token.
+- **Track pages that need restyling to the kit:** Example (`/t/example/`) is unstyled HTML. Loading `/kit/gurtos.js`
+  also makes a page's own fetches carry the phone's token.
 - **For the core and the image:** nothing reads Settings `autoUpdate` and `updateChannel` yet, so Settings and setup
   don't show them; Updates shows the running system and how updates work. Owner rights on a phone that is not the
   owner are found by a `GET /api/vault` that answers 403 (a console error); a field in `GET /api/system` would do.

@@ -21,7 +21,7 @@ interface Push {
   title?: string;
   body?: string;
   costCents?: number;
-  /** The task's source, like 'shopper:buy:3'. */
+  /** The task's source, like 'factory:run:3'. */
   source?: string;
   mac?: string;
 }
@@ -113,10 +113,8 @@ self.addEventListener('push', (e) => {
         icon: '/icon-192.png',
         badge: '/icon-192.png',
       };
-      // Android shows these buttons; iOS ignores them and opens the app on a tap. A Shopper purchase is approved with
-      // Face ID, which a service worker can't ask for, so it offers Deny only and a tap opens it in the app.
-      if (p.type === 'approval')
-        options.actions = p.source?.startsWith('shopper:') ? [{ action: 'deny', title: 'Deny' }] : [{ action: 'approve', title: 'Approve' }, { action: 'deny', title: 'Deny' }];
+      // Android shows these buttons; iOS ignores them and opens the app on a tap.
+      if (p.type === 'approval') options.actions = [{ action: 'approve', title: 'Approve' }, { action: 'deny', title: 'Deny' }];
       await self.registration.showNotification(p.box ?? m.box.name, options);
     })(),
   );
@@ -125,7 +123,7 @@ self.addEventListener('push', (e) => {
 self.addEventListener('notificationclick', (e) => {
   const p = (e.notification.data ?? {}) as Push;
   e.notification.close();
-  const approve = e.action === 'approve' && !p.source?.startsWith('shopper:'); // never approve a Face ID purchase from here
+  const approve = e.action === 'approve';
   if (p.type === 'approval' && p.id && (approve || e.action === 'deny')) e.waitUntil(answer(p, approve));
   else e.waitUntil(openApp(page(p)));
 });
