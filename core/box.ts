@@ -789,6 +789,7 @@ class Core {
 
   /** The agent of a task that names none: the owner's choice, or the first that has a model service (Droid when none has). */
   defaultAgent(): string {
+    if (process.env.BOX_NO_DROID) return 'droid'; // a demo run: a task that names no agent is refused as Droid's, never run on another paid model
     if (this.settings.defaultAgent !== 'auto') return this.settings.defaultAgent;
     return AGENTS().find((n) => WORKERS[n].upstreams.some((u) => this.usable(WORKERS[n], u))) ?? 'droid';
   }
@@ -813,6 +814,7 @@ class Core {
       fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
       const out = fs.openSync(path.join(dir, 'install.log'), 'a');
       // As root, outside any task: the package is the vendor's own, pinned to one version. Tasks only run it.
+      // shortcut: pinned by version, not by checksum; add an integrity hash per package if npm's own check is not enough.
       const npm = spawn('npm', ['install', '--prefix', dir, '--no-audit', '--no-fund', '--no-update-notifier', '--loglevel=error', def.pkg], { stdio: ['ignore', out, out], env: { ...process.env, PATH: `${path.dirname(process.execPath)}:${process.env.PATH ?? '/usr/bin:/bin'}` } });
       const ended = (ok: boolean) => {
         fs.closeSync(out);
