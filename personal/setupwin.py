@@ -30,8 +30,8 @@ MODEL_KEYS = [  # key name, label, where to get it. One is enough.
 KEYS_LINE = "GurtOS keeps keys where agents can't read them. You can replace a key but never see it."
 # Apps that suit one person on their own computer. The rest (a company's finance desk, team tools, the box's own
 # plumbing, developer samples) stay out of Personal's lists.
-PERSONAL_APPS = ('find', 'shopper', 'wallet', 'factory', 'fetch', 'mana', 'apify')
-TEST_APPS = {'shopper', 'wallet', 'fetch'}  # they pay with test cards, devnet USDC or test FET, never real money
+PERSONAL_APPS = ('find', 'factory')
+TEST_APPS: set[str] = set()  # apps that only move test money; none ships today
 
 
 def check_key(name, value):
@@ -49,9 +49,8 @@ def check_key(name, value):
 
 
 def key_title(name):
-    """A key's human name: ANTHROPIC_API_KEY is "Anthropic API key", CRS_PASSWORD is "CRS password"."""
-    named = {'WALLET_SOLANA_KEY': 'Solana wallet key', 'ASI_ONE_API_KEY': 'ASI:One API key', 'AGENTVERSE_API_KEY': 'Agentverse API key',
-             'STRIPE_SECRET_KEY': 'Stripe test key', 'SHOPPER_CARD': 'Test card', 'MOSS_PROJECT_ID': 'Moss project', 'MOSS_PROJECT_KEY': 'Moss key'}
+    """A key's human name: ANTHROPIC_API_KEY is "Anthropic API key", FACTORY_API_KEY is "Factory API key"."""
+    named = {'MOSS_PROJECT_ID': 'Moss project', 'MOSS_PROJECT_KEY': 'Moss key'}
     if name in named:
         return named[name]
     keep = {'API', 'CRS', 'URL', 'ID', 'ASI', 'USDC', 'IMAP', 'POP3', 'SMTP'}
@@ -708,7 +707,7 @@ def permission_summary(view):
 
 
 def app_title(a):
-    # shortcut: tracks without a window have no title, so the box sends the folder name ("credit-desk"); this reads it
+    # shortcut: tracks without a window have no title, so the box sends the folder name ("some-app"); this reads it
     # as words. Drop once every track names itself.
     t = a.get('title') or a['id']
     return t if t != a['id'] else t.replace('-', ' ').capitalize()
