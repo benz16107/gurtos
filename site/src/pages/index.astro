@@ -212,7 +212,7 @@ const faq = [
           </thead>
           <tbody>
             {compare.map(([row, cells]) => (
-              <tr><th scope="row">{row}</th>{cells.map((c, i) => <td class:list={{ us: i === cells.length - 1, nd: c === 'Not documented' }}>{c}</td>)}</tr>
+              <tr><th scope="row">{row}</th>{cells.map((c, i) => <td class:list={{ us: i === cells.length - 1 }}>{c}</td>)}</tr>
             ))}
           </tbody>
         </table>
@@ -391,7 +391,6 @@ const faq = [
   .compare .us { background: var(--gw-surface); padding-left: 16px; color: var(--gw-ink); }
   .compare thead .us { font-weight: 700; }
   .compare td { color: var(--gw-ink-2); }
-  .compare td.nd { color: var(--gw-rule-strong); }
   .table-note { margin-top: 16px; max-width: 52rem; font-size: var(--gw-text-sm); color: var(--gw-ink-2); }
 
   .way { display: grid; gap: 12px; padding: 24px 0; border-top: 1px solid var(--gw-rule); }
