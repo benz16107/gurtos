@@ -1,19 +1,23 @@
 // The GurtOS relay (relay/): a computer's own https address, push to phones, and the meeting place for pairing and
 // Quick Start, and the hosted web app (relay/app) that pairs a phone through it. A self-hosted relay and web app change
-// these two lines (docs/self-host.md).
+// these two lines (docs/self-host.md). There is no default relay: the hosted one is gone.
 import { useEffect, useState } from 'preact/hooks';
 
-export const RELAY = 'https://box.gurtos.com';
+export const RELAY: string | undefined = undefined; // for example 'https://relay.example.com'
 export const APP = 'https://app.gurtos.com';
-export const RELAY_HOST = new URL(RELAY).host;
+export const RELAY_HOST = RELAY ? new URL(RELAY).host : undefined;
+/** What a person sees when something needs a relay and none is set (same words as core/remote.ts). */
+export const NO_RELAY = 'To reach this computer from anywhere, run your own relay (gurtos.com/docs/guides/self-host/) and add its address in Settings, or use a private network such as Tailscale.';
+export const NO_RELAY_PUSH = 'Phone notifications need a relay. Run your own relay (gurtos.com/docs/guides/self-host/) and add its address in Settings. A private network such as Tailscale does not send notifications.';
 export const APP_HOST = new URL(APP).hostname;
-/** A computer's address on the relay: rosa.box.gurtos.com. */
-export const onRelay = (host: string) => host.endsWith(`.${RELAY_HOST}`) && /^[a-z0-9-]{3,30}$/.test(host.slice(0, -RELAY_HOST.length - 1));
+/** A computer's address on the relay: rosa.relay.example.com. False when there is no relay. */
+export const onRelay = (host: string) => !!RELAY_HOST && host.endsWith(`.${RELAY_HOST}`) && /^[a-z0-9-]{3,30}$/.test(host.slice(0, -RELAY_HOST.length - 1));
 export const SELF_HOST_DOCS = 'https://gurtos.com/docs/guides/self-host/';
 
 let probe: { at: number; up: Promise<boolean> } | undefined;
-/** Whether the relay answers, asked at most once a minute and given 5 s. */
+/** Whether the relay answers, asked at most once a minute and given 5 s. With no relay: false at once, no request. */
 export function relayUp() {
+  if (!RELAY) return Promise.resolve(false);
   if (!probe || Date.now() - probe.at > 60_000)
     probe = { at: Date.now(), up: fetch(`${RELAY}/v1/status`, { cache: 'no-store', signal: AbortSignal.timeout(5000) }).then((r) => r.ok, () => false) };
   return probe.up;

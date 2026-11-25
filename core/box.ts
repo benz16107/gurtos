@@ -22,7 +22,7 @@ import * as system from './system.ts';
 import { VAULT_NAME, loadVault, redact, removeVaultKey, secretValues, writeVaultKey } from './vault.ts';
 import { challenge, checkSso, noGroup, personId, provider, random, roleFor, verifyIdToken, whoIs, type Claims, type Sso } from './sso.ts';
 import * as push from './push.ts';
-import { APP, Remote, SECRET_KEY, remotePairUrl } from './remote.ts';
+import { APP, NO_RELAY_PUSH, Remote, SECRET_KEY, remotePairUrl } from './remote.ts';
 import * as quick from './quickstart.ts';
 import * as perms from './permissions.ts';
 
@@ -1952,10 +1952,10 @@ class Core {
     const remote = this.remote.saved;
     const base = this.boxUrl();
     let url: string;
-    if (remote) url = remotePairUrl(code, remote, !!this.remote.custom);
+    if (remote) url = remotePairUrl(code, remote);
     else {
       const allowed = () => !this.setup.done && !fs.existsSync(this.remote.offFile);
-      const rv = allowed() ? randomBytes(16).toString('base64url') : '';
+      const rv = allowed() && this.remote.relay ? randomBytes(16).toString('base64url') : '';
       const lan = /^https?:\/\//.test(base) ? new URL(base).host : '';
       url = `${APP}/pair#${Object.entries({ code, ...(rv ? { rv } : {}), ...(lan ? { lan } : {}), n: this.boxName() }).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`; // %20, not +, so every parser reads the name
       if (rv) void this.remote.watchPairing(rv, () => (this.pairCodes.get(code)?.expiry ?? 0) > Date.now(), allowed, BOX_ID);
@@ -2161,16 +2161,17 @@ class Core {
   async pushTo(d: Device, fields: Record<string, string | number>, topic: string) {
     const s = this.remote.saved;
     const secret = this.vault.get(SECRET_KEY);
+    const relay = this.remote.needRelay(NO_RELAY_PUSH); // no relay: refuse before anything else, and make no call
     if (!d.push) throw Object.assign(new Error('turn on notifications on this phone first'), { status: 409 });
     if (!s || !secret) throw Object.assign(new Error('notifications go through the relay: turn on "Reach this computer from anywhere" first'), { status: 409 });
     try {
-      const r = await push.send(this.remote.relay, s.name, secret, d.push, { v: 1, machine: BOX_ID, box: this.boxName(), url: s.url, ...fields }, topic);
+      const r = await push.send(relay, s.name, secret, d.push, { v: 1, machine: BOX_ID, box: this.boxName(), url: s.url, ...fields }, topic);
       if (r.gone) delete d.push, this.saveDevices(); // the phone dropped the subscription
       return r;
     } catch (e) {
       console.error(`push to ${d.name} failed: ${(e as Error).message}`);
       // fetch throws a TypeError when the relay does not answer; the gateway's own refusals are plain Errors.
-      const why = e instanceof TypeError ? `the relay at ${new URL(this.remote.relay).host} isn't answering` : (e as Error).message;
+      const why = e instanceof TypeError ? `the relay at ${new URL(relay).host} isn't answering` : (e as Error).message;
       throw Object.assign(new Error(`The notification was not sent: ${why}.`), { status: 502 });
     }
   }
@@ -2183,7 +2184,7 @@ class Core {
     const remote = this.remote;
     return (this.quickTarget ??= new quick.Target({
       get relay() {
-        return remote.relay; // read each time: the owner can change the relay (PUT /api/remote/relay) without a restart
+        return remote.needRelay(); // read each time: the owner can change the relay (PUT /api/remote/relay) without a restart
       },
       app: APP,
       apply: { putKey: (n, v, w) => this.putKey(n, v, w), changeSettings: (p, w) => this.changeSettings(p, w), enableApp: (id) => this.enableApp(id), disableApp: (id) => this.disableApp(id), setupStep: (k, st, d) => this.setupStep(k, st, d) },
@@ -2229,7 +2230,7 @@ class Core {
     if (body?.approve !== true) return { sent: false };
     const keys = p.keys.filter((k) => this.vault.has(k)); // exactly the keys the question named; `keys` on the answer is ignored
     const b = quick.bundle({ from: this.boxName(), keys: Object.fromEntries(keys.map((k) => [k, this.vault.get(k)!])), settings: this.settings as never, apps: apps(), phonePk: p.phonePk });
-    return quick.deliver(this.remote.relay, p, b).then(() => {
+    return quick.deliver(this.remote.needRelay(), p, b).then(() => {
       // Names only, never values; and the new computer's key, so the owner can match it later.
       this.write({ type: 'note', track: 'quickstart', data: { text: `Quick Start: ${d.name} sent ${keys.length ? keys.join(', ') : 'no keys'}, ${b.apps.length} apps and spending rules to "${p.n}" (key ${quick.fingerprint(p.pk)})`, to: p.n, keys, pk: quick.fingerprint(p.pk) } });
       return { sent: true, phrase: quick.phrase(p.pk) };

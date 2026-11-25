@@ -14,7 +14,7 @@ import { Alert, AppIcon, Badge, Button, Icon, Menu, Popover, Progress, Switch } 
 import { focus, focused, minimize, open, phone, wm } from './wm.tsx';
 import { launchable, type Launchable } from './apps/index.tsx';
 import { PRODUCT } from './product.ts';
-import { RELAY, RELAY_HOST, onRelay, useRelayUp } from './relay.ts';
+import { NO_RELAY, RELAY, RELAY_HOST, onRelay, useRelayUp } from './relay.ts';
 import { appOf, asks, boxList, dollars, hhmm, ofState, pending, plural, selfBox, taskTitle, testMoney, trackOf, useNow, zone, spentToday } from './util.ts';
 
 /** Which shell overlay is open. One at a time, like a real desktop. */
@@ -1048,7 +1048,7 @@ export function useIdleLock(enabled: boolean) {
 
 // ---------- not paired ----------
 
-/** 'rosa.box.gurtos.com' or a full address, as the base the box's API is under. */
+/** 'rosa.relay.example.com' or a full address, as the base the box's API is under. */
 const boxUrl = (a: string) => {
   const t = a.trim().replace(/\/+$/, '');
   return /^https?:\/\//.test(t) ? t : `https://${t}`;
@@ -1067,6 +1067,7 @@ export async function pairWith(url: string, body: { code: string; name: string }
 /** Ask the computer to turn on remote access, then wait for its address (or its reason) for up to 3 minutes. */
 async function rendezvous(rv: string): Promise<string> {
   // The relay's rendezvous for a computer without its own address yet (POST /api/pair/start with remote access off).
+  if (!RELAY) throw new Error(NO_RELAY);
   const at = `${RELAY}/v1/rv/${encodeURIComponent(rv)}`;
   const put = await fetch(`${at}/ask`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(10_000) }).catch(() => undefined);
   if (!put?.ok) throw new Error("GurtOS's relay isn't answering, so pairing over the internet isn't available right now.");
@@ -1126,7 +1127,7 @@ function MeetBox({ rv, code, name, lan, onHost }: { rv?: string; code: string; n
                 {lan ? `Connect this phone to the same Wi-Fi or network as ${name}, then open it.` : `Connect this phone to the same Wi-Fi or network as ${name}, then open ${PRODUCT} at its address on that network and type the code from its screen.`}
               </p>
               {local}
-              <p class="t-caption t-secondary">Pairing over the internet needs {PRODUCT}'s relay, which isn't answering right now.</p>
+              <p class="t-caption t-secondary">{RELAY ? `Pairing over the internet needs ${PRODUCT}'s relay, which isn't answering right now.` : NO_RELAY}</p>
             </>
           ) : (
             <>
@@ -1174,7 +1175,7 @@ export function PairFirst() {
   const [state, setState] = useState<'ask' | 'busy' | string>('ask');
   const revoked = !!localStorage.getItem('gurtos.was-paired');
   const [inSafari, setInSafari] = useState(false);
-  // On app.gurtos.com the link names the box: /pair?box=rosa.box.gurtos.com#<code>.
+  // On app.gurtos.com the link names the box: /pair?box=rosa.relay.example.com#<code>.
   const [boxAddr, setBoxAddr] = useState(new URLSearchParams(location.search).get('box') ?? '');
   const adding = hosted && machines().length > 0;
   // app.gurtos.com reaches a computer only through the relay.
@@ -1239,14 +1240,14 @@ export function PairFirst() {
             <div class="g-banner" role="status">
               <Icon name="dialog-warning" />
               <div class="t-caption">
-                {PRODUCT}'s relay isn't answering right now, so this page can't reach a computer over the internet. On the same Wi-Fi, open {PRODUCT} at the computer's own address instead, like http://192.168.1.20:7700, and pair there.
+                {RELAY ? `${PRODUCT}'s relay isn't answering right now, so this page can't reach a computer over the internet.` : 'This page has no relay set up, so it can only reach a computer by its own address.'} On the same Wi-Fi, open {PRODUCT} at the computer's own address instead, like http://192.168.1.20:7700, and pair there.
               </div>
             </div>
           )}
           {hosted && (
             <label class="gos-field">
               <span class="t-body-strong">Computer's address</span>
-              <input class="g-field" value={boxAddr} placeholder={`rosa.${RELAY_HOST}`} inputMode="url" autoComplete="off" autoCapitalize="none" spellcheck={false} onInput={(e) => setBoxAddr((e.target as HTMLInputElement).value)} />
+              <input class="g-field" value={boxAddr} placeholder={RELAY_HOST ? `rosa.${RELAY_HOST}` : 'home.example.com'} inputMode="url" autoComplete="off" autoCapitalize="none" spellcheck={false} onInput={(e) => setBoxAddr((e.target as HTMLInputElement).value)} />
             </label>
           )}
           <label class="gos-field">

@@ -99,7 +99,7 @@ A failed request returns an error status and an object with one field:
 
 ## Cross-origin requests
 
-The portal is served from the same address as the API, so it needs no CORS. The GurtOS web app's origin (`BOX_APP`, `https://app.gurtos.com` by default) is always allowed. The hosted web app can only reach a box at an https address that a relay gives it. A web app served from another origin, such as a development server, needs that origin in `BOX_ORIGINS`:
+The portal is served from the same address as the API, so it needs no CORS. The GurtOS web app's origin (`BOX_APP`, `https://app.gurtos.com` by default) is always allowed. The hosted web app has no relay of its own, so it reaches a box only at the box's own https address. A web app served from another origin, such as a development server, needs that origin in `BOX_ORIGINS`:
 
 ```sh
 BOX_ORIGINS=http://localhost:5173
@@ -203,12 +203,12 @@ These routes work on any box and mean something once Business is on. `GET /api/b
 ## Remote access and push notifications
 
 :::note
-A hosted relay is not running during the preview. The code still defaults `BOX_RELAY` to `https://box.gurtos.com`. To use remote access, point the box at a relay you run with `BOX_RELAY` or `PUT /api/remote/relay`. See [Run your own relay](/docs/guides/self-host/) and [Reach your box from anywhere](/docs/guides/reach-your-box-from-anywhere/).
+There is no hosted relay and no default. With no relay set, turning remote access on, push, a test push and Quick Start answer `409` at once with a sentence that says so, and make no request. To use them, point the box at a relay you run with `BOX_RELAY` or `PUT /api/remote/relay`. See [Run your own relay](/docs/guides/self-host/) and [Reach your box from anywhere](/docs/guides/reach-your-box-from-anywhere/).
 :::
 
-- `GET /api/remote` returns `{enabled, name, url, state, error?, relay}`. `state` is `off`, `starting`, `connected` or `error`, and `relay` is the relay's host. The box checks its address again at most every 30 seconds.
+- `GET /api/remote` returns `{enabled, name, url, state, error?, relay}`. `state` is `off`, `starting`, `connected` or `error`, and `relay` is the relay's host, or `null` when none is set. The box checks its address again at most every 30 seconds.
 - `POST /api/remote {"name": "rosa"}` (owner) enrolls the name at the relay, starts the tunnel and the certificate, and returns `state: starting`. Poll `GET /api/remote` until `connected`. A name is 3 to 30 lowercase letters, digits and hyphens. `GET /api/remote/name/<name>` (owner) asks the relay whether a name is free. `DELETE /api/remote` (owner) stops both and releases the name.
-- `GET /api/remote/relay` returns `{url, default, custom}`. `PUT /api/remote/relay {"url": "https://relay.example.com"}` (owner) chooses a relay. It must be an `https://` host name with no path, query or login, and it must resolve only to public addresses. It answers `409` while remote access is on. `{"url": null}` goes back to the default.
+- `GET /api/remote/relay` returns `{url, default, custom}`; `url` and `default` are `null` when no relay is set. `PUT /api/remote/relay {"url": "https://relay.example.com"}` (owner) chooses a relay. It must be an `https://` host name with no path, query or login, and it must resolve only to public addresses. It answers `409` while remote access is on. `{"url": null}` goes back to `BOX_RELAY`, or to none.
 - `GET /api/push`, `PUT /api/push` and `DELETE /api/push` show, set and clear the calling phone's push subscription. `PUT` takes `{subscription, key}` from a paired device only. `POST /api/push/test` sends that phone a test push, or answers `502` with a sentence when it could not be sent, for example because the relay is not answering. Pushes go through the relay, so they need remote access on.
 - Quick Start sets up a new computer from one you own: `POST /api/quickstart/start` on the new computer's own screen during setup, `GET /api/quickstart` and `POST /api/quickstart/stop` for the owner, and `POST /api/quickstart/send` and `POST /api/quickstart/send/<id>` from an owner phone on the source computer.
 

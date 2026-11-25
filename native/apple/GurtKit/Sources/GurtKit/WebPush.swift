@@ -103,7 +103,8 @@ public func randomBytes(_ n: Int) -> Data {
   return Data((0..<n).map { _ in UInt8.random(in: 0...255, using: &g) })
 }
 
-/** The APNs address the relay forwards to (relay/README.md, "The push gateway"). */
-public func apnsEndpoint(topic: String, deviceToken: Data, sandbox: Bool) -> String {
-  "\(GurtConfig.relay.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")))/v1/apns/\(topic)/\(sandbox ? "sandbox" : "production")/\(deviceToken.map { String(format: "%02x", $0) }.joined())"
+/** The APNs address the relay forwards to (relay/README.md, "The push gateway"). nil with no relay. */
+public func apnsEndpoint(topic: String, deviceToken: Data, sandbox: Bool, relay: URL? = GurtConfig.relay) -> String? {
+  guard let relay else { return nil }
+  return "\(relay.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")))/v1/apns/\(topic)/\(sandbox ? "sandbox" : "production")/\(deviceToken.map { String(format: "%02x", $0) }.joined())"
 }

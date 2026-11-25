@@ -1,7 +1,7 @@
 // node --experimental-strip-types --test portal/relay.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { onRelay, pairLink, pairNote, relayDown } from './src/relay.ts';
+import { RELAY, onRelay, pairLink, pairNote, relayDown, relayUp } from './src/relay.ts';
 
 const code = { code: 'eef8169a', expiresAt: '' };
 const lan = 'http://192.168.1.20:7700/pair#eef8169a';
@@ -16,11 +16,11 @@ test('a pairing QR uses the home network unless the relay can help', () => {
   assert.equal(pairLink(meet, undefined), undefined);
   assert.equal(pairLink(meet, true), meet.url);
   assert.equal(pairLink(meet, false), lan);
-  // Remote access on: the hosted app with the computer's own address.
-  const remote = { ...code, url: 'https://app.gurtos.com/pair?box=home.box.gurtos.com#eef8169a', boxUrl: 'https://home.box.gurtos.com/pair#eef8169a' };
-  assert.equal(pairLink(remote, false), remote.url);
+  // Remote access on: this build has no relay, so no address counts as the app's own; the computer's own page.
+  const remote = { ...code, url: 'https://app.gurtos.com/pair?box=home.relay.example.com#eef8169a', boxUrl: 'https://home.relay.example.com/pair#eef8169a' };
+  assert.equal(pairLink(remote, false), remote.boxUrl);
   // Remote access on through the owner's own relay: the hosted app cannot reach it, so the computer's own page.
-  const own = { ...code, url: 'https://app.gurtos.com/pair?box=rosa.box.example.com#eef8169a', boxUrl: 'https://rosa.box.example.com/pair#eef8169a' };
+  const own = { ...code, url: 'https://app.gurtos.com/pair?box=rosa.relay.example.com#eef8169a', boxUrl: 'https://rosa.relay.example.com/pair#eef8169a' };
   assert.equal(pairLink(own, true), own.boxUrl);
   // During setup with the relay down and no address of its own: no QR rather than one that cannot work.
   assert.equal(pairLink({ ...meet, boxUrl: undefined }, false), undefined);
@@ -38,6 +38,17 @@ test('the note says where the phone has to be', () => {
 test('relay errors and addresses', () => {
   for (const m of ['fetch failed', 'the relay answered 502', "can't reach the relay: fetch failed", 'The operation was aborted due to timeout']) assert.ok(relayDown(m), m);
   for (const m of ['name taken', 'only the owner can do this', 'the relay answered 409']) assert.ok(!relayDown(m), m);
-  assert.ok(onRelay('rosa.box.gurtos.com'));
-  for (const h of ['box.gurtos.com', 'a.b.box.gurtos.com', 'rosa.box.gurtos.com.evil.com', 'ro.box.gurtos.com']) assert.ok(!onRelay(h), h);
+  // There is no default relay: no address is on it.
+  assert.equal(RELAY, undefined);
+  for (const h of ['rosa.relay.example.com', 'relay.example.com']) assert.ok(!onRelay(h), h);
+});
+
+test('with no relay, the probe answers false at once and makes no request', async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = (() => { throw new Error('fetch must not be called without a relay'); }) as never;
+  try {
+    assert.equal(await relayUp(), false);
+  } finally {
+    globalThis.fetch = real;
+  }
 });

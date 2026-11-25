@@ -57,8 +57,9 @@ info:
 
     ## Remote access
 
-    The remote access, push and Quick Start routes work against a relay. A hosted relay is not running
-    during the preview, so point the box at a relay you run, with `BOX_RELAY` or `PUT /remote/relay`.
+    The remote access, push and Quick Start routes work against a relay. There is no hosted relay and no
+    default: point the box at a relay you run, with `BOX_RELAY` or `PUT /remote/relay`. With none set, these
+    routes answer `409` at once with a sentence that says so, and the box makes no request.
 
     ## Not under /api
 
@@ -104,7 +105,7 @@ tags:
   - name: Sign-in
     description: 'Preview. Work-account sign-in (OpenID Connect) on a GurtOS Business box. These routes are open: they say nothing private.'
   - name: Remote access
-    description: A box's own https address through a relay, and which relay it uses. A hosted relay is not running during the preview.
+    description: A box's own https address through a relay, and which relay it uses. There is no hosted relay, and no default.
   - name: Push notifications
     description: Notifications on a phone when a task needs an OK. They go through the relay, so they need remote access on.
   - name: Quick Start
@@ -1514,15 +1515,15 @@ paths:
       summary: Remote access state
       description: |
         Whether the box has its own https address through a relay, and whether the tunnel is up. The box
-        checks the address again at most every 30 seconds, so a dropped tunnel shows. A hosted relay is not
-        running during the preview. Point the box at a relay you run with `PUT /remote/relay` or `BOX_RELAY`.
+        checks the address again at most every 30 seconds, so a dropped tunnel shows. `relay` is `null` when no
+        relay is set: point the box at a relay you run with `PUT /remote/relay` or `BOX_RELAY`.
       responses:
         '200':
           description: The state.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RemoteState' }
-              example: { enabled: true, name: rosa, url: 'https://rosa.box.example.com', state: connected, relay: box.example.com }
+              example: { enabled: true, name: rosa, url: 'https://rosa.relay.example.com', state: connected, relay: relay.example.com }
     post:
       tags: [Remote access]
       operationId: enableRemote
@@ -1556,7 +1557,7 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409':
-          description: The name is taken or reserved, or this box already has another name. Turn remote access off first to change it.
+          description: The name is taken or reserved, this box already has another name (turn remote access off first to change it), or no relay is set.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1625,7 +1626,7 @@ paths:
       tags: [Remote access]
       operationId: getRelay
       summary: The relay in use
-      description: The relay the box uses, the box's default (`BOX_RELAY`, else `https://box.gurtos.com`, which is not running during the preview), and whether the owner chose this one.
+      description: The relay the box uses, the box's default (`BOX_RELAY`), and whether the owner chose this one. `url` and `default` are `null` when no relay is set.
       responses:
         '200':
           description: The relay.
@@ -1635,8 +1636,8 @@ paths:
                 type: object
                 required: [url, default, custom]
                 properties:
-                  url: { type: string, example: 'https://relay.example.com' }
-                  default: { type: string }
+                  url: { type: ['string', 'null'], example: 'https://relay.example.com' }
+                  default: { type: ['string', 'null'] }
                   custom: { type: boolean, description: True when the owner chose `url` with `PUT /remote/relay`. }
     put:
       tags: [Remote access]
@@ -1655,7 +1656,7 @@ paths:
               type: object
               required: [url]
               properties:
-                url: { type: ['string', 'null'], description: 'The relay''s address. `null` goes back to the default.' }
+                url: { type: ['string', 'null'], description: 'The relay''s address. `null` goes back to `BOX_RELAY`, or to none.' }
             example: { url: 'https://relay.example.com' }
       responses:
         '200':
@@ -1800,7 +1801,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '502':
-          description: 'The push was not sent, with the reason in a sentence, such as "The notification was not sent: the relay at box.example.com isn''t answering."'
+          description: 'The push was not sent, with the reason in a sentence, such as "The notification was not sent: the relay at relay.example.com isn''t answering."'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1811,7 +1812,7 @@ paths:
       operationId: startQuickStart
       summary: Start Quick Start on a new computer
       description: |
-        Only on the new computer's own screen (anyone else gets 403), and only during setup (else 409). Makes
+        Only on the new computer's own screen (anyone else gets 403), and only during setup (else 409, or 409 when no relay is set). Makes
         a one-time key and a rendezvous slot at the relay, valid for 10 minutes. Show `url` as a QR code and
         the four-word `phrase` beside it. The owner's phone scans the code and asks a computer it owns to
         send. The relay sees only ciphertext.
@@ -3159,7 +3160,7 @@ components:
         url: { type: ['string', 'null'], description: The box's own https address. }
         state: { type: string, enum: [off, starting, connected, error] }
         error: { type: string, description: 'Why it failed, in words. If the relay no longer holds this box''s name (freed after 30 days offline, or given to another computer), it says to turn remote access off and on again.' }
-        relay: { type: string, description: The relay's host name. }
+        relay: { type: ['string', 'null'], description: The relay's host name, or null when no relay is set. }
 
     QuickStartState:
       type: object

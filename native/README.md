@@ -19,9 +19,9 @@ None of these is on a store. The Android APK and the Mac DMG are sideloaded.
 ## What needs the relay
 
 The relay (`relay/`, [docs/self-host.md](../docs/self-host.md)) gives a computer a public address, forwards push
-notifications, and lets a phone and a computer find each other. **The hosted relay at box.gurtos.com is offline as
-of October 29, 2026.** Until it is back, run your own and point the computer and the apps at it, or stay on the home
-network.
+notifications, and lets a phone and a computer find each other. **The hosted relay at box.gurtos.com is offline, and the apps have no default
+relay.** Run your own and point the computer and the apps at it (`GURTOS_RELAY`), or stay on the home network. With no
+relay set, the apps make no relay request and say so at once.
 
 | | Home network, no relay | Needs a relay |
 |---|---|---|
@@ -41,7 +41,7 @@ A home address is the computer's IP address. If the router gives it a new one, t
 again, or give the computer a fixed address in the router.
 
 When the relay or the computer does not answer, the apps say so in one sentence and stop waiting: "Couldn't reach the
-GurtOS relay (box.gurtos.com). It may be offline. You can still pair on the same Wi-Fi as the computer." No screen
+relay (relay.example.com). It may be offline. You can still pair on the same Wi-Fi as the computer." No screen
 waits on a spinner for a relay that is down.
 
 ## iPhone
@@ -57,7 +57,7 @@ waits on a spinner for a relay that is down.
 - **Pair** with the QR code on the computer's screen (scan it in the app, which uses VisionKit), or type its address and
   code. The code can have spaces or a dash in it. The QR code is one of these links, and the app reads all of them:
   - `http://<ip>:7700/pair#<code>`, the computer's own page on the home network, when remote access is off.
-  - `https://<name>.box.gurtos.com/pair#<code>` or `https://app.gurtos.com/pair?box=<name>.box.gurtos.com#<code>`, when remote access is on.
+  - `https://<name>.relay.example.com/pair#<code>` or `https://app.gurtos.com/pair?box=<name>.relay.example.com#<code>`, when remote access is on.
   - `https://app.gurtos.com/pair#code=…&rv=…&lan=…&n=…`, while a new computer is in setup and the relay answers. The app
     offers "Same Wi-Fi? Pair on this network" and "Pair over the internet".
 
@@ -202,7 +202,7 @@ This works for the Apple apps and Android today, with a rebuild. The computer ne
 `BOX_APP`, or Settings, Remote access), and the relay needs the push and web app pieces from
 [docs/self-host.md](../docs/self-host.md).
 
-- **iPhone, Watch and Mac**: set `GURTOS_RELAY` (for example `https://box.example.com`) and `GURTOS_APP_HOST` (for
+- **iPhone, Watch and Mac**: set `GURTOS_RELAY` (for example `https://relay.example.com`) and `GURTOS_APP_HOST` (for
   example `app.example.com`) at the top of `native/apple/project.yml`, then rebuild. The build writes them into each
   app's Info.plist, where `GurtKit/Sources/GurtKit/Config.swift` reads them, and into the iPhone app's associated
   domain. Host the association file from `relay/app/.well-known/apple-app-site-association` on your app host with your

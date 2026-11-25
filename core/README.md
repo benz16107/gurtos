@@ -263,7 +263,7 @@ so it goes through the same approvals, budgets and log as a phone, and it never 
 "Claude" from the box's screen, then:
 
 ```sh
-claude mcp add gurtos --env BOX_URL=https://<name>.box.gurtos.com --env BOX_TOKEN=<token> -- node /path/to/gurtos/core/claude-mcp.ts
+claude mcp add gurtos --env BOX_URL=https://<name>.relay.example.com --env BOX_TOKEN=<token> -- node /path/to/gurtos/core/claude-mcp.ts
 ```
 
 On the box itself, `BOX_URL=http://127.0.0.1:7700` and no token. Keep needs a device paired as the owner.
@@ -894,8 +894,8 @@ Column names are camelCase in the TypeScript client and snake_case in SQL (`cost
 
 ## Remote access and push notifications
 
-**Reach this computer from anywhere** (opt in, owner only) gives the box its own address, `https://<name>.box.gurtos.com`,
-through the GurtOS relay (`relay/README.md`). The box opens an outbound tunnel (frpc), so nothing is forwarded at
+**Reach this computer from anywhere** (opt in, owner only) gives the box its own address, `https://<name>.relay.example.com`,
+through a relay you run (`relay/README.md`). There is no hosted relay and no default: with none set, turning it on, push and Quick Start refuse at once with a sentence, and make no request. The box opens an outbound tunnel (frpc), so nothing is forwarded at
 home, and gets its own Let's Encrypt certificate (Caddy on 127.0.0.1). TLS ends on the box: the relay passes the
 encrypted bytes by name and cannot read them. Requests through it carry `X-Forwarded-For`, so they need a paired
 device's token like any other off-box request. Code: `core/remote.ts`. State: `BOX_HOME/remote.json`,
@@ -903,17 +903,16 @@ device's token like any other off-box request. Code: `core/remote.ts`. State: `B
 
 | Request | Does |
 |---|---|
-| `GET /api/remote` | `{enabled, name, url, state: off, starting, connected or error, error?, relay}`. Checks the address again at most every 30 s. |
+| `GET /api/remote` | `{enabled, name, url, state: off, starting, connected or error, error?, relay}`; `relay` is the relay's host, or `null` when none is set. Checks the address again at most every 30 s. |
 | `GET /api/remote/name/<name>` | Owner. Asks the relay: `{name, available, reason?}` |
 | `POST /api/remote {name}` | Owner. Enrolls the name, starts the tunnel and TLS, returns `state: starting`; poll until `connected` (5 to 60 s for a new certificate). Names: lowercase letters, digits and hyphens, 3 to 30 characters, some reserved. |
 | `DELETE /api/remote` | Owner. Stops both, releases the name at the relay (`released`), removes the secret. The certificate is kept for next time. |
-| `GET /api/remote/relay` | `{url, default, custom}`: the relay in use (`https://...`), the box's default (`BOX_RELAY`, else `https://box.gurtos.com`), and whether the owner chose this one |
-| `PUT /api/remote/relay {url}` | Owner, while remote access is off (`409` otherwise). Use your own relay (`relay/README.md`): an `https://` host name with no path, query or login, that resolves only to public addresses; anything else is a `400` naming why. `{url: null}` goes back to the default. Saved in `BOX_HOME/relay.json`. Pushes and Quick Start use the same relay. |
+| `GET /api/remote/relay` | `{url, default, custom}`: the relay in use (`https://...`), the box's default (`BOX_RELAY`), and whether the owner chose this one. `url` and `default` are `null` when no relay is set |
+| `PUT /api/remote/relay {url}` | Owner, while remote access is off (`409` otherwise). Use your own relay (`relay/README.md`): an `https://` host name with no path, query or login, that resolves only to public addresses; anything else is a `400` naming why. `{url: null}` goes back to `BOX_RELAY`, or to none. Saved in `BOX_HOME/relay.json`. Pushes and Quick Start use the same relay. |
 
-While it is on, `POST /api/pair/start` returns `url: https://app.gurtos.com/pair?box=<name>.box.gurtos.com#<code>` (the
-GurtOS app adds the box to its machines) and `boxUrl`, the box's own `https://.../pair#<code>`. With your own relay and
-the hosted app (which accepts only its own relay's addresses), `url` is the computer's own address on your relay,
-`https://<name>.<relay host>/pair#<code>`; `GET /api/boxes`
+While it is on, `POST /api/pair/start` returns `boxUrl`, the box's own `https://<name>.<relay host>/pair#<code>`. With the
+hosted app (which has no relay of its own), `url` is the same address. With your own app (`BOX_APP`), `url` is
+`https://<your app>/pair?box=<name>.<relay host>#<code>`, and the app adds the box to its machines; `GET /api/boxes`
 reports the https address. The API allows CORS from `https://app.gurtos.com` (always) and `BOX_ORIGINS`.
 
 **Push notifications** reach the GurtOS app on a phone. The app subscribes once with the relay gateway's VAPID key
@@ -947,14 +946,14 @@ always deny. core/demo.ts checks each of these; native/demo.ts checks every call
 The apps read `owner` from `GET /api/me` to decide whether to show owner controls such as the kill switch, and pair
 from the link in a pairing QR: the computer's own page on the home network (`boxUrl` from `POST /api/pair/start`)
 unless remote access is on. A test notification that cannot be sent is a `502` whose error is a sentence ("The
-notification was not sent: the relay at box.gurtos.com isn't answering.").
+notification was not sent: the relay at relay.example.com isn't answering.").
 
 ## Quick Start: set up a new computer from one you own
 
 The phone is the bridge (`core/quickstart.ts`). The new computer shows a QR with its one-time X25519 key, a secret and a
 relay rendezvous id, all after `#`. The owner's phone asks a computer it owns to send. That computer's core seals the
 bundle to the new computer's key mixed with the secret, and the new computer applies it with the same setup functions
-as the wizard. The relay sees only ciphertext.
+as the wizard. The relay sees only ciphertext. Quick Start needs a relay: with none set, `start` and `send` answer `409` with the no-relay sentence and make no request.
 
 | Request | Does |
 |---|---|

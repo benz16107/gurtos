@@ -38,8 +38,8 @@ Then run `systemctl daemon-reload && systemctl restart box.service`. On a GurtOS
 | `BOX_STDB_URL` | `ws://127.0.0.1:3000` | Where the box reaches SpacetimeDB |
 | `BOX_STDB_DB` | `box` | The SpacetimeDB database name |
 | `BOX_STDB` | on | `off` skips SpacetimeDB. The box works without it; the portal falls back to the log stream. |
-| `BOX_RELAY` | `https://box.gurtos.com` | The relay a box uses for remote access when its owner has not chosen another in Settings, Remote access. A hosted relay is not running during the preview, so set this to a relay you run: see [Self-host](/docs/guides/self-host/). |
-| `BOX_APP` | `https://app.gurtos.com` | The web app the box lets call its API. The app is up, but it reaches a box only at an https address that a relay gives it. |
+| `BOX_RELAY` | none | The relay a box uses for remote access, push and Quick Start when its owner has not chosen another in Settings, Remote access. There is no hosted relay, so with none set those features refuse at once: set this to a relay you run: see [Self-host](/docs/guides/self-host/). |
+| `BOX_APP` | `https://app.gurtos.com` | The web app the box lets call its API. The app is up, but it has no relay of its own, so it reaches a box only at the box's own https address. |
 | `BOX_FRPC`, `BOX_CADDY` | `/usr/local/bin/frpc`, `/usr/local/bin/caddy` | The tunnel and certificate programs remote access starts |
 | `BOX_ACME_CA` | none | A certificate authority address, for tests. Leave it unset to use Let's Encrypt. |
 
@@ -124,7 +124,7 @@ A relay you run reads these. See [Self-host](/docs/guides/self-host/).
 
 | Variable | Default | Does |
 |---|---|---|
-| `RELAY_DOMAIN` | `box.gurtos.com` | The domain boxes get names under. Set it to your own. |
+| `RELAY_DOMAIN` | none | The domain boxes get names under, like `relay.example.com`. Required: the relay refuses to start without it. |
 | `RELAY_STATE` | `/var/lib/gurtos-relay` | Where the relay keeps its names, secrets and keys |
 | `RELAY_TUNNEL_PORT` | `7000` | The port boxes connect their tunnels to. The relay announces it to boxes. |
 | `RELAY_PLUGIN_PORT` | `7400` | The loopback port where the tunnel server asks the relay to allow a box |

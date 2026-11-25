@@ -642,7 +642,7 @@ class SetupWindow(Adw.ApplicationWindow):
 
         def work():
             remote = remote_view()
-            relay = (remote or {}).get('relay', 'box.gurtos.com')
+            relay = (remote or {}).get('relay')
             return api('POST', '/api/pair/start', {'owner': True}), remote, relay_up(relay)
         background(work, show)
         return scroller
