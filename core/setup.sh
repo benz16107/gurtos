@@ -48,7 +48,10 @@ if ! have_node; then
   tmp=$(mktemp -d)
   curl -fsSL "$base/$file" -o "$tmp/$file"
   (cd "$tmp" && curl -fsSL "$base/SHASUMS256.txt" | grep " $file\$" | sha256sum -c -)
-  tar -xJf "$tmp/$file" -C /usr/local --strip-components=1 --exclude CHANGELOG.md --exclude README.md --exclude LICENSE
+  # Its own folder, linked from /usr/local/bin: nothing else in /usr/local is overwritten, and uninstall removes it whole.
+  rm -rf /usr/local/lib/gurtos-node && mkdir -p /usr/local/lib/gurtos-node
+  tar -xJf "$tmp/$file" -C /usr/local/lib/gurtos-node --strip-components=1 --exclude CHANGELOG.md --exclude README.md
+  for b in /usr/local/lib/gurtos-node/bin/*; do ln -sfn "$b" /usr/local/bin/; done
   rm -rf "$tmp"
 fi
 node -v
