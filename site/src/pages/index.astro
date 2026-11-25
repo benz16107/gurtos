@@ -152,10 +152,15 @@ const faq = [
           {pins.map((p) => <li><strong>{p.title}</strong> {p.text}</li>)}
         </ol>
       </div>
-      {/* DEMO SLOT: the lead's short recording of an undo goes here, in place of this link to the 3-minute video. */}
+      <figure class="clip">
+        <video controls preload="none" playsinline poster="/demo-poster.png" width="1280" height="720">
+          <source src="/demo.mp4" type="video/mp4" />
+        </video>
+        <figcaption>52 seconds on a fresh install, sped up where it says so. Two Claude Code tasks run as their own users. A call to a host that is not on the list is refused and logged, a $3.00 test spend over a $1.00 budget waits for an OK, and one task is undone while the others keep their files.</figcaption>
+      </figure>
       <a class="video" href={VIDEO}>
         <Image src={poster} widths={[320, 480]} sizes="200px" alt="" />
-        <span><strong>Watch the 3-minute video</strong> on YouTube. A task stops for an OK, a booby-trapped page is stopped, one task is undone and the power is pulled.</span>
+        <span><strong>Watch the 3-minute video</strong> on YouTube, from an earlier build. A task stops for an OK, a booby-trapped page is stopped, one task is undone and the power is pulled.</span>
       </a>
     </div>
   </section>
@@ -330,6 +335,9 @@ const faq = [
   .legend li { counter-increment: pin; display: grid; grid-template-columns: 28px 1fr; column-gap: 12px; padding: 4px 0 8px; color: var(--gw-on-glass-2); font-size: var(--gw-text-sm); line-height: 1.5; }
   .legend li::before { content: counter(pin); grid-row: span 2; }
   .legend strong { color: var(--gw-on-glass); font-weight: 600; }
+  .clip { margin: 48px 0 0; max-width: 60rem; }
+  .clip video { display: block; width: 100%; height: auto; border-radius: 4px; outline: 1px solid #3a4653; background: #1c252d; }
+  .clip figcaption { margin-top: 12px; max-width: 46rem; color: var(--gw-on-glass-2); }
   .video { display: flex; align-items: center; gap: 16px; margin-top: 48px; max-width: 46rem; color: var(--gw-on-glass-2) !important; text-decoration: none; }
   .video img { width: 160px; flex: none; border-radius: 4px; outline: 1px solid #3a4653; }
   .video strong { color: #8db4dd; text-decoration: underline; text-underline-offset: 0.18em; }

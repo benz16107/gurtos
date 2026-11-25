@@ -14,7 +14,7 @@
   <a href="ROADMAP.md">Roadmap</a>
 </p>
 
-![The box's own screen: two tasks wait for an OK while others keep running](docs/images/box-screen.png)
+[![52 seconds of the portal on a fresh install: two Claude Code tasks, a refused call to a host not on the list, a test spend that waits for an OK, and one task undone](docs/images/demo.gif)](docs/images/demo.mp4)
 
 GurtOS runs coding agents (Claude Code, Codex CLI, opencode, Factory's Droid, or a local model through Ollama) on a
 Linux machine you own. Each task runs as its own Linux user, on its own copy-on-write copy of your files, and undo
