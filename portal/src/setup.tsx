@@ -141,7 +141,7 @@ export const STEPS: Step[] = [
     id: 'phone',
     label: 'Owner',
     page: (w) => <OwnerStep w={w} />,
-    summary: () => "You can add more phones later. Only the owner's phone can change settings.",
+    summary: (w) => (w.draft.owner === 'screen' ? 'Whoever is at this screen is the owner. You can pair a phone later in Settings, Devices.' : "You can add more phones later. Only the owner's phone can change settings."),
     data: (w) => ({ owner: w.draft.owner, device: ownerDevice?.name ?? null }),
   },
   {
