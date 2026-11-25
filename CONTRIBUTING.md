@@ -2,7 +2,10 @@
 
 Thanks for looking. GurtOS is a preview maintained by one person, so expect rough edges and slow replies. Issues
 and pull requests are welcome. Please read the [Code of Conduct](CODE_OF_CONDUCT.md) first, and see the
-[roadmap](ROADMAP.md) for what is planned and what is not.
+[roadmap](ROADMAP.md) for what is planned and what is not. Issues labelled
+[good first issue](https://github.com/benz16107/gurtos/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+are small, say which files to read, and need no test VM unless they say so. Questions and ideas go in
+[Discussions](https://github.com/benz16107/gurtos/discussions).
 
 **Security problems:** report them privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue.
 
@@ -15,7 +18,7 @@ git clone https://github.com/benz16107/gurtos.git gurtos
 cd gurtos
 npm ci                    # the box, the relay and the apps
 npm ci --prefix portal    # the portal's own packages; its tests import them
-npm test                  # unit tests
+npm test                  # unit tests, about 2 seconds, no VM or keys
 npm run check             # type check
 node release/check.ts     # no keys, machine names, addresses or private emails in committed files
 ```

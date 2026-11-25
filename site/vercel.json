@@ -33,6 +33,11 @@
       "permanent": true
     },
     {
+      "source": "/docs/guides/(agent-payments|asi-one|connect-jira|send-the-log-to-elastic|shopping-agent)(/?)",
+      "destination": "https://github.com/benz16107/gurtos/blob/calhacks-2026/site/src/content/docs/docs/guides/$1.md",
+      "permanent": true
+    },
+    {
       "source": "/(introduction|get-started|concepts|guides|reference|security|project)/(.*)",
       "destination": "/docs/$1/$2",
       "permanent": true
