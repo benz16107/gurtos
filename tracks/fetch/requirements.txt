@@ -1,2 +1,0 @@
-uagents==0.26.1
-uagents-core==0.4.12
