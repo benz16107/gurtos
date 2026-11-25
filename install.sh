@@ -5,8 +5,8 @@
 #   curl -fsSL https://gurtos.com/install.sh | sh -s -- --uninstall    remove everything it added
 #   ./install.sh [--uninstall]                                         the same, from a clone: installs that clone
 # Options: --yes answers yes to the question before it changes anything (needed for --uninstall with no terminal).
-# Environment: GURTOS_REPO and GURTOS_REF pick another repository or branch to clone. ANTHROPIC_API_KEY or
-# FACTORY_API_KEY, if set, goes into the vault so the first task can run (adding it in the portal is safer: a key on
+# Environment: GURTOS_REPO and GURTOS_REF pick another repository or branch to clone. ANTHROPIC_API_KEY,
+# OPENAI_API_KEY or FACTORY_API_KEY, if set, goes into the vault so the first task can run (adding it in the portal is safer: a key on
 # a command line stays in your shell history). GURTOS_FORCE=1 skips the Ubuntu, memory and disk checks.
 # The whole script is one function, so a download cut off halfway runs nothing.
 set -eu
@@ -119,7 +119,7 @@ install() {
   [ "$person" = root ] || $SUDO usermod -aG gurtos "$person"
 
   vault=/etc/box/vault.env
-  for key in ANTHROPIC_API_KEY FACTORY_API_KEY; do
+  for key in ANTHROPIC_API_KEY OPENAI_API_KEY FACTORY_API_KEY; do
     value=$(printenv "$key" || true)
     if [ -n "$value" ] && ! $SUDO grep -q "^$key=" "$vault"; then
       printf '%s=%s\n' "$key" "$value" | $SUDO tee -a "$vault" >/dev/null # on stdin, so the key is never in a process list

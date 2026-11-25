@@ -59,7 +59,12 @@ const setText = (w: Wiz, name: string) => {
   return at ? `Set at ${hhmm(at)}` : 'Set';
 };
 /** The model key that lets agents think: an Anthropic key or a Factory key. Either one is enough. */
-const MODEL_KEYS = ['ANTHROPIC_API_KEY', 'FACTORY_API_KEY'] as const;
+const MODEL_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'FACTORY_API_KEY'] as const;
+const KEY_INFO: Record<(typeof MODEL_KEYS)[number], { title: string; placeholder: string; help: string; worker: string }> = {
+  ANTHROPIC_API_KEY: { title: 'Anthropic', placeholder: 'sk-ant-…', help: 'From console.anthropic.com, under API keys. It starts with sk-ant-. Usage bills your Anthropic account.', worker: 'Claude, with your Anthropic key' },
+  OPENAI_API_KEY: { title: 'OpenAI', placeholder: 'sk-…', help: 'From platform.openai.com, under API keys. Codex and opencode use it. Usage bills your OpenAI account.', worker: 'Codex, with your OpenAI key' },
+  FACTORY_API_KEY: { title: 'Factory', placeholder: 'Paste the key', help: 'From app.factory.ai, under Settings, API keys. Usage uses your Factory credits.', worker: 'Claude, with your Factory key' },
+};
 const modelKey = (w: Wiz) => MODEL_KEYS.find((k) => keySet(w, k));
 const iface = () => box.system?.network.interfaces.find((i) => !i.address.startsWith('127.') && i.name !== 'lo');
 const wifi = (name = '') => name.startsWith('w');
@@ -653,27 +658,24 @@ function ModelsStep({ w }: { w: Wiz }) {
     if (!value.trim() || shape) return;
     // GurtOS checks the key with Anthropic: `checked` only when Anthropic accepted it, and a refused key is a 400 in words.
     api<{ check?: 'ok' | 'unchecked'; checked?: boolean; message?: string }>('PUT', `/vault/${via}`, { value: value.trim() }).then(
-      (r) => (setValue(''), setRefused(''), setSaved(r?.message ? sentence(r.message) : r?.checked ? `${anthropic ? 'Anthropic' : 'Factory'} key saved.` : "Saved. GurtOS couldn't check it yet."), w.reloadVault()),
+      (r) => (setValue(''), setRefused(''), setSaved(r?.message ? sentence(r.message) : r?.checked ? `${KEY_INFO[via].title} key saved.` : "Saved. GurtOS couldn't check it yet."), w.reloadVault()),
       (e) => (setSaved(''), setRefused(sentence((e as Error).message))),
     );
   };
   return (
     <div class="gos-setup-col">
       <Intro title="Add a model key">
-        {PRODUCT} needs one key so agents can think. Use either an Anthropic API key or a Factory API key. GurtOS keeps keys where agents can't read them, and adds the key to their model calls on the way out.
+        {PRODUCT} needs one key so agents can think: an Anthropic, OpenAI or Factory API key. A local model through Ollama or your own endpoint go in Settings, Agents & Models after setup. GurtOS keeps keys where agents can't read them, and adds the key to their model calls on the way out.
       </Intro>
       <ToggleGroup
         label="Which key"
         value={via}
         onChange={(v) => (setVia(v), setValue(''), setSaved(''), setRefused(''))}
-        options={[
-          ['ANTHROPIC_API_KEY', 'Anthropic'],
-          ['FACTORY_API_KEY', 'Factory'],
-        ]}
+        options={MODEL_KEYS.map((k): [(typeof MODEL_KEYS)[number], string] => [k, KEY_INFO[k].title])}
       />
       <div class="gos-setup-field">
         <label class="t-heading" for="gos-setup-model-key">
-          {anthropic ? 'Anthropic API key' : 'Factory API key'}
+          {KEY_INFO[via].title} API key
         </label>
         <input
           id="gos-setup-model-key"
@@ -681,15 +683,13 @@ function ModelsStep({ w }: { w: Wiz }) {
           type="password"
           autoComplete="off"
           spellcheck={false}
-          placeholder={keySet(w, via) ? `${setText(w, via)}. Paste a new key to replace it.` : anthropic ? 'sk-ant-…' : 'Paste the key'}
+          placeholder={keySet(w, via) ? `${setText(w, via)}. Paste a new key to replace it.` : KEY_INFO[via].placeholder}
           value={value}
           onInput={(e) => setValue((e.target as HTMLInputElement).value)}
           onKeyDown={(e) => e.key === 'Enter' && value.trim() && (e.preventDefault(), save())}
         />
         <span class="t-caption t-secondary">
-          {anthropic
-            ? 'From console.anthropic.com, under API keys. It starts with sk-ant-. Usage bills your Anthropic account.'
-            : 'From app.factory.ai, under Settings, API keys. Usage uses your Factory credits.'}
+          {KEY_INFO[via].help}
         </span>
       </div>
       <div class="gos-setup-save">
@@ -702,7 +702,7 @@ function ModelsStep({ w }: { w: Wiz }) {
       </div>
       <Group title="Model keys">
         {MODEL_KEYS.map((k) => (
-          <Row icon="dialog-password" title={k === 'ANTHROPIC_API_KEY' ? 'Anthropic' : 'Factory'} sub={k} key={k}>
+          <Row icon="dialog-password" title={KEY_INFO[k].title} sub={k} key={k}>
             <span class={`g-row-value${keySet(w, k) ? ' t-success' : ''}`}>{keySet(w, k) ? setText(w, k) : 'Not set'}</span>
           </Row>
         ))}
@@ -830,7 +830,7 @@ function DoneStep({ w }: { w: Wiz }) {
           <span class="g-row-value">{owner}</span>
         </Row>
         <Row title="Worker">
-          <span class="g-row-value">{modelKey(w) === 'ANTHROPIC_API_KEY' ? 'Claude, with your Anthropic key' : modelKey(w) ? 'Claude, with your Factory key' : "No model key yet: agents can't start"}</span>
+          <span class="g-row-value">{modelKey(w) ? KEY_INFO[modelKey(w)!].worker : "No model key yet: agents can't start"}</span>
         </Row>
       </Group>
       {surface !== 'box screen' && <p class="t-caption t-secondary">This computer's own screen opens the desktop at the same time.</p>}

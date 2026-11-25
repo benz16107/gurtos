@@ -1044,7 +1044,7 @@ paths:
                       properties:
                         id: { type: string, enum: [key, droid, owner, phone] }
                         text: { type: string }
-              example: { ok: false, missing: [{ id: key, text: 'No model key yet: set ANTHROPIC_API_KEY or FACTORY_API_KEY.' }] }
+              example: { ok: false, missing: [{ id: key, text: 'No model service yet: add an Anthropic, OpenAI or Factory key, a local model through Ollama, or your own endpoint in Settings, Agents & Models.' }] }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /setup/code:

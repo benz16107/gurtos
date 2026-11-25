@@ -218,7 +218,7 @@ export function canUse(def: WorkerDef, upstream: string, cfg: UpstreamConfig, ke
 /** 'ollama/qwen3' names the upstream and the model; 'sonnet' only the model. */
 export function splitModel(asked?: string): { upstream?: string; model?: string } {
   const m = /^([a-z]+)\/(.+)$/.exec(asked ?? '');
-  return m && m[1] in UPSTREAMS ? { upstream: m[1], model: m[2] } : { model: asked || undefined };
+  return m && Object.hasOwn(UPSTREAMS, m[1]) ? { upstream: m[1], model: m[2] } : { model: asked || undefined };
 }
 
 /**
@@ -235,7 +235,7 @@ export function plan(def: WorkerDef, asked: string | undefined, usable: (upstrea
   if (!upstream || !usable(upstream)) {
     const need = (want.upstream ? [want.upstream] : def.upstreams).map((u) => UPSTREAMS[u].title).join(', ');
     // Droid's sentence is the one the screens and docs already know.
-    throw new Error(def.name === 'droid' ? 'No model key yet. Add an Anthropic or Factory API key in Settings, Accounts & Keys, then start the task again.' : `No model key yet. ${def.title} needs one of these set up in Settings, Accounts & Keys: ${need}. Then start the task again.`);
+    throw new Error(def.name === 'droid' ? 'No model key yet. Add an Anthropic or Factory API key in Settings, Accounts & Keys, then start the task again.' : `No model key yet. ${def.title} needs one of these set up in Settings, Agents & Models: ${need}. Then start the task again.`);
   }
   return { upstream, model: def.model(want.model, upstream) };
 }
