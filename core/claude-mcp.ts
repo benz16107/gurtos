@@ -2,7 +2,7 @@
 // box, answers its approvals, and undoes or keeps its work. It speaks MCP over stdio and calls the box's API with a
 // paired device's token, so it goes through the same approvals, budgets and log as a phone, and never sees a vault key.
 //   BOX_URL    the box: https://<name>.relay.example.com, or http://127.0.0.1:7700 on the box itself
-//   BOX_TOKEN  a paired device's token (pair a device named "Claude" from the box's screen); not needed on the box
+//   BOX_TOKEN  a paired device's token (pair a device named "Claude" from the box's screen); not needed on the box for root or the gurtos group
 // claude mcp add gurtos --env BOX_URL=https://<name>.relay.example.com --env BOX_TOKEN=<token> -- node <repo>/core/claude-mcp.ts
 //   BOX_MCP_ANSWER=on  also let Claude approve or deny requests (off by default: see box_answer_approval below)
 // Setup mode, for a new computer (AGENT-SETUP.md): BOX_SETUP_CODE=<the code on its screen> instead of BOX_TOKEN.

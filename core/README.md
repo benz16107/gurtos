@@ -266,7 +266,7 @@ so it goes through the same approvals, budgets and log as a phone, and it never 
 claude mcp add gurtos --env BOX_URL=https://<name>.relay.example.com --env BOX_TOKEN=<token> -- node /path/to/gurtos/core/claude-mcp.ts
 ```
 
-On the box itself, `BOX_URL=http://127.0.0.1:7700` and no token. Keep needs a device paired as the owner.
+On the box itself, `BOX_URL=http://127.0.0.1:7700` and no token, run as root or as a member of the `gurtos` group. Keep needs a device paired as the owner.
 
 ## Tripwire keys and the task sandbox
 
