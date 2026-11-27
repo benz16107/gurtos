@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "@moss-js/moss": "1.21.0"
+    "@moss-js/moss": "1.26.0"
   }
 }
