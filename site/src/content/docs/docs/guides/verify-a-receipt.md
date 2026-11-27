@@ -30,8 +30,8 @@ You can also paste a receipt into that page or drop a receipt file on it. The bo
 - **The anchor.** When the daily fingerprint written to Solana covers the task, the page checks that the chain reaches
   it, looking it up on a public Solana node. Until then it says "not anchored yet".
 
-Elastic holds a copy of the log that the box cannot rewrite. When the box makes a receipt, it compares the task's
-entries with that copy and signs what it found. See [Send the log to Elastic](/docs/guides/send-the-log-to-elastic/).
+If the box has an Elastic copy of its log (an Elastic account and the `ELASTIC_URL` and `ELASTIC_BOX_KEY` keys), it compares the task's
+entries with that copy when it makes the receipt, and signs what it found. No app in this repository writes that copy.
 
 ## Redacted receipts
 

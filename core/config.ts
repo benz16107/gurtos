@@ -3,6 +3,9 @@
 // never reaches the files or the core.
 import fs from 'node:fs';
 import path from 'node:path';
+import { addressProblem } from './upstreams.ts';
+import type { Wire } from './upstreams.ts';
+import { AGENTS } from './workers/index.ts';
 
 export function readJson<T>(file: string, fallback: T): T {
   try {
@@ -61,6 +64,16 @@ export interface Settings {
   paused: boolean;
   /** The most an Apple Watch may approve with its own token. US cents; 0: a Watch may only deny. */
   watchLimitCents: number;
+  /**
+   * The agent a task runs on when it names none: 'auto' (the first agent that has a model service set up, Droid
+   * first), or one of core/workers/index.ts: 'droid', 'claude', 'codex', 'opencode'.
+   */
+  defaultAgent: string;
+  /** Where Ollama listens, like http://127.0.0.1:11434. Empty: no local model. */
+  ollamaHost: string;
+  /** The owner's own model endpoint (LiteLLM, a company gateway), and the format it speaks. Its key, if it wants one, is CUSTOM_API_KEY in the vault. */
+  customBaseUrl: string;
+  customWire: Wire;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -76,6 +89,10 @@ export const DEFAULT_SETTINGS: Settings = {
   autoUpdate: true,
   appearance: { theme: 'system', accent: '' },
   paused: false,
+  defaultAgent: 'auto',
+  ollamaHost: '',
+  customBaseUrl: '',
+  customWire: 'anthropic',
 };
 
 const fail = (field: string, why: string): never => {
@@ -184,6 +201,19 @@ export function applyPatch(current: Settings, patch: unknown): Settings {
         break;
       case 'paused':
         next.paused = bool(key, v);
+        break;
+      case 'defaultAgent':
+        next.defaultAgent = oneOf(key, v, ['auto', ...AGENTS()]);
+        break;
+      case 'ollamaHost':
+      case 'customBaseUrl': {
+        const why = addressProblem(v);
+        if (why) fail(key, why);
+        next[key] = (v as string).replace(/\/+$/, '');
+        break;
+      }
+      case 'customWire':
+        next.customWire = oneOf(key, v, ['anthropic', 'openai'] as const);
         break;
       case 'appearance': {
         if (!isObj(v)) fail(key, 'must be {theme, accent}');

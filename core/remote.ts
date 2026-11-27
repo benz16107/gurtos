@@ -1,4 +1,4 @@
-// Remote access: this box's own HTTPS address, <name>.box.gurtos.com, through the GurtOS relay. Opt in, owner only.
+// Remote access: this box's own HTTPS address, <name>.<relay domain>, through a relay you run (relay/). Opt in, owner only.
 //
 // Two helpers run beside the box, as hardened transient units the box starts and stops:
 //   box-tunnel  frpc: one outbound connection to the relay (no port forwarding at home). The relay hands it every
@@ -17,8 +17,12 @@ import net from 'node:net';
 import path from 'node:path';
 import { notPublic } from './net.ts';
 
-/** The relay a box uses unless its owner chose another in Settings (Remote.relay). */
-export const RELAY = (process.env.BOX_RELAY ?? 'https://box.gurtos.com').replace(/\/+$/, '');
+/** The relay from BOX_RELAY, used unless the owner chose another in Settings (Remote.relay). None by default: the hosted relay is gone. */
+export const RELAY: string | undefined = process.env.BOX_RELAY?.replace(/\/+$/, '') || undefined;
+
+/** What a person sees when something needs a relay and none is set. Nothing calls the network first. */
+export const NO_RELAY = 'To reach this computer from anywhere, run your own relay (gurtos.com/docs/guides/self-host/) and add its address in Settings, or use a private network such as Tailscale.';
+export const NO_RELAY_PUSH = 'Phone notifications need a relay. Run your own relay (gurtos.com/docs/guides/self-host/) and add its address in Settings. A private network such as Tailscale does not send notifications.';
 
 /** Why this can't be a relay address, or undefined: https, a host name (not an address), no login, path or query. */
 export function relayProblem(url: unknown): string | undefined {
@@ -51,11 +55,11 @@ export const APP = (process.env.BOX_APP ?? DEFAULT_APP).replace(/\/+$/, '');
 
 /**
  * Where a phone pairs with a computer whose remote access is on: the GurtOS app, told the computer's address. The
- * hosted app accepts only addresses on its own relay, so with the owner's own relay and the hosted app, the phone pairs
- * on the computer's own address on that relay instead (it serves the same pairing page).
+ * hosted app has no relay of its own any more, so with the hosted app the phone pairs on the computer's own address
+ * on your relay instead (it serves the same pairing page). Your own app accepts your relay's addresses.
  */
-export const remotePairUrl = (code: string, saved: { host: string; url: string }, customRelay: boolean, app = APP) =>
-  customRelay && app === DEFAULT_APP ? `${saved.url}/pair#${code}` : `${app}/pair?box=${saved.host}#${code}`;
+export const remotePairUrl = (code: string, saved: { host: string; url: string }, app = APP) =>
+  app === DEFAULT_APP ? `${saved.url}/pair#${code}` : `${app}/pair?box=${saved.host}#${code}`;
 const FRPC = process.env.BOX_FRPC ?? '/usr/local/bin/frpc';
 const CADDY = process.env.BOX_CADDY ?? '/usr/local/bin/caddy';
 /** Let's Encrypt's staging CA for tests (its certificates are not trusted, so the self-check skips verifying). */
@@ -125,8 +129,15 @@ export class Remote {
   /** The owner's own relay (Settings), saved in relay.json; else RELAY. */
   relayFile: string;
   custom?: string;
-  get relay() {
+  get relay(): string | undefined {
     return this.custom ?? RELAY;
+  }
+
+  /** The relay, or a 409 with `why` at once: no network call is made without one. */
+  needRelay(why = NO_RELAY): string {
+    const r = this.relay;
+    if (!r) throw err(409, why);
+    return r;
   }
 
   constructor(home: string, deps: RemoteDeps) {
@@ -152,15 +163,15 @@ export class Remote {
 
   view() {
     const s = this.saved;
-    return { enabled: !!s, name: s?.name ?? null, url: s?.url ?? null, state: this.state, ...(this.error ? { error: this.error } : {}), relay: new URL(this.relay).host };
+    return { enabled: !!s, name: s?.name ?? null, url: s?.url ?? null, state: this.state, ...(this.error ? { error: this.error } : {}), relay: this.relay ? new URL(this.relay).host : null };
   }
 
-  /** GET /api/remote/relay: the relay in use, the box's default, and whether the owner chose this one. */
+  /** GET /api/remote/relay: the relay in use, the box's default (BOX_RELAY), and whether the owner chose this one. Null when none is set. */
   relayView() {
-    return { url: this.relay, default: RELAY, custom: !!this.custom };
+    return { url: this.relay ?? null, default: RELAY ?? null, custom: !!this.custom };
   }
 
-  /** PUT /api/remote/relay {url}: the owner's own relay, or null for the default. Only while remote access is off. */
+  /** PUT /api/remote/relay {url}: the owner's own relay, or null to go back to BOX_RELAY (or none). Only while remote access is off. */
   async setRelay(url: unknown) {
     if (this.saved) throw err(409, `turn remote access off first: this computer's address ${this.saved.host} is on the relay it uses now`);
     if (url === null || url === '' || url === undefined) {
@@ -172,7 +183,7 @@ export class Remote {
       this.custom = origin === RELAY ? undefined : origin;
       if (!this.custom) fs.rmSync(this.relayFile, { force: true });
     }
-    this.deps.note({ remote: 'relay', relay: this.relay, text: `Remote access relay: ${new URL(this.relay).host}${this.custom ? '' : ' (the default)'}` });
+    this.deps.note({ remote: 'relay', relay: this.relay ?? null, text: this.relay ? `Remote access relay: ${new URL(this.relay).host}${this.custom ? '' : ' (BOX_RELAY)'}` : 'Remote access relay: none' });
     return this.relayView();
   }
 
@@ -188,15 +199,16 @@ export class Remote {
    * valid; `alive` turns false once the code is used or expires.
    */
   async watchPairing(rv: string, alive: () => boolean, allowed: () => boolean, boxId: string) {
+    if (!this.relay) return; // no relay, no rendezvous: nothing to watch
     this.watching?.abort(); // one watcher at a time: the wizard renews codes, and only the newest QR is on screen
     const mine = (this.watching = new AbortController());
     const live = () => alive() && !mine.signal.aborted;
     const put = (slot: string, body: unknown, headers: Record<string, string> = {}) =>
-      fetch(`${this.relay}/v1/rv/${rv}/${slot}`, { method: 'PUT', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) });
+      fetch(`${this.needRelay()}/v1/rv/${rv}/${slot}`, { method: 'PUT', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) });
     let failures = 0;
     while (live() && failures < 3) {
       try {
-        const r = await fetch(`${this.relay}/v1/rv/${rv}/ask?wait=25`, { signal: AbortSignal.any([mine.signal, AbortSignal.timeout(35_000)]) });
+        const r = await fetch(`${this.needRelay()}/v1/rv/${rv}/ask?wait=25`, { signal: AbortSignal.any([mine.signal, AbortSignal.timeout(35_000)]) });
         if (r.status === 404) continue; // nobody asked yet
         if (!r.ok) throw new Error(`relay answered ${r.status}`);
         if (!this.saved) {
@@ -224,6 +236,7 @@ export class Remote {
 
   /** Turn remote access on with a name made from the box id (gurt-2a48f6), adding -2, -3 if it is taken. */
   async enableAuto(boxId: string) {
+    this.needRelay(); // before the name loop, which retries on 409
     const base = boxId.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').replace(/--+/g, '-').slice(0, 26).replace(/-+$/, '');
     const root = base.length >= 3 && !nameProblem(base) ? base : `gurt-${base || 'box'}`.slice(0, 26);
     for (const name of [root, `${root}-2`, `${root}-3`, `${root}-${Math.random().toString(36).slice(2, 6)}`]) {
@@ -241,7 +254,7 @@ export class Remote {
   async available(name: string) {
     const problem = nameProblem(name);
     if (problem) return { name, available: false, reason: problem };
-    const r = await toRelay(`${this.relay}/v1/names/${name}`, { signal: AbortSignal.timeout(10_000) });
+    const r = await toRelay(`${this.needRelay()}/v1/names/${name}`, { signal: AbortSignal.timeout(10_000) });
     if (!r.ok) throw err(502, `the relay answered ${r.status}`);
     return r.json();
   }
@@ -253,13 +266,14 @@ export class Remote {
     }
     const problem = nameProblem(name);
     if (problem) throw err(400, `name: ${problem}`);
+    const relay = this.needRelay();
     for (const bin of [FRPC, CADDY]) if (!fs.existsSync(bin)) throw err(500, `${bin} is missing: this box needs a newer GurtOS for remote access`);
-    const r = await toRelay(`${this.relay}/v1/names`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }), signal: AbortSignal.timeout(15_000) });
+    const r = await toRelay(`${relay}/v1/names`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }), signal: AbortSignal.timeout(15_000) });
     const out = (await r.json().catch(() => ({}))) as any;
     if (!r.ok) throw err(r.status === 409 || r.status === 400 || r.status === 429 ? r.status : 502, out.error ?? `the relay answered ${r.status}`);
     // What the relay sends goes into config files: accept only plain host names, a port and a token-like secret.
     const hostOk = (h: unknown) => typeof h === 'string' && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(h);
-    if (out.host !== `${name}.${new URL(this.relay).host}` || !hostOk(out.tunnel?.host) || !hostOk(out.tunnel?.serverName) || !Number.isInteger(out.tunnel?.port) || !/^[A-Za-z0-9_-]{20,200}$/.test(out.secret ?? ''))
+    if (out.host !== `${name}.${new URL(relay).host}` || !hostOk(out.tunnel?.host) || !hostOk(out.tunnel?.serverName) || !Number.isInteger(out.tunnel?.port) || !/^[A-Za-z0-9_-]{20,200}$/.test(out.secret ?? ''))
       throw err(502, 'the relay sent an answer this box does not accept');
     this.deps.setSecret(out.secret);
     fs.rmSync(this.offFile, { force: true });
@@ -277,7 +291,7 @@ export class Remote {
     this.stopUnits();
     let released = true;
     try {
-      const r = await fetch(`${this.relay}/v1/names/${s.name}`, { method: 'DELETE', headers: { authorization: `Bearer ${s.name}.${this.deps.secret() ?? ''}` }, signal: AbortSignal.timeout(10_000) });
+      const r = await fetch(`${this.needRelay()}/v1/names/${s.name}`, { method: 'DELETE', headers: { authorization: `Bearer ${s.name}.${this.deps.secret() ?? ''}` }, signal: AbortSignal.timeout(10_000) });
       released = r.ok;
     } catch {
       released = false; // the name expires by itself after 30 days without the tunnel
@@ -298,6 +312,7 @@ export class Remote {
     this.state = 'starting';
     this.error = undefined;
     try {
+      const relay = this.needRelay();
       const secret = this.deps.secret();
       if (!secret) throw new Error(`the vault has no ${SECRET_KEY}; turn remote access off and on again`);
       fs.mkdirSync(path.join(this.dir, 'caddy'), { recursive: true, mode: 0o700 });
@@ -305,7 +320,7 @@ export class Remote {
       // in case the relay's API is down when the box starts.
       const caFile = path.join(this.dir, 'relay-ca.pem');
       try {
-        const t = (await (await fetch(`${this.relay}/v1/tunnel`, { signal: AbortSignal.timeout(10_000) })).json()) as { ca: string };
+        const t = (await (await fetch(`${relay}/v1/tunnel`, { signal: AbortSignal.timeout(10_000) })).json()) as { ca: string };
         if (t.ca?.includes('BEGIN CERTIFICATE')) fs.writeFileSync(caFile, t.ca, { mode: 0o600 });
       } catch (e) {
         if (!fs.existsSync(caFile)) throw new Error(`can't reach the relay: ${(e as Error).message}`);
@@ -342,7 +357,7 @@ export class Remote {
     return this.view();
   }
 
-  /** '' when https://<name>.box.gurtos.com/api/health is this box, else why not. */
+  /** '' when this box's own https address /api/health is this box, else why not. */
   selfCheck(): Promise<string> {
     const s = this.saved!;
     return new Promise((resolve) => {

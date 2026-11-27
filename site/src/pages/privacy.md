@@ -61,7 +61,7 @@ Only when you turn them on:
   relay's push gateway to your phone's push service (Apple, Google, Mozilla or Microsoft). The box encrypts each push
   for your phone first, so neither the relay nor the push service can read it. The relay sees names, connection
   times, caller addresses and byte counts. See [what the relay can and cannot see](/docs/security/model/#12-remote-access-through-the-relay).
-  A hosted relay at `box.gurtos.com` is not running during the preview; when it runs, we are that relay's operator.
+  The hosted relay at `box.gurtos.com` no longer runs, and no GurtOS software defaults to it. A relay you run yourself is yours; we do not operate it.
 - **The fleet view**, off on a new box. When the owner turns it on, the box reports its id, name, edition and
   version, task counts, what it spent today and whether it is online to the `gurtos-fleet` database on SpacetimeDB
   Maincloud, which the GurtOS project runs. Never a prompt, a file, a request's text or a key. `BOX_FLEET_DB` and

@@ -64,7 +64,7 @@ Turn it on with [Turn on GurtOS Business](/docs/guides/turn-on-business/). The d
 | Agents run as | One Linux user per task | One Linux user per task | The same |
 | Agents work on | Workspaces on the box | Copies of your own folders | The same as its base |
 | Undo | Undo any one task | Keep or Undo after each task, and undo a Keep | The same as its base |
-| Approvals | Portal, phone, and apps such as Jira or a chat | Desktop notifications, portal, phone | Routed by role, amount and a written policy |
+| Approvals | Portal, phone, and apps that use the API | Desktop notifications, portal, phone | Routed by role, amount and a written policy |
 | Screen | The portal, full screen on the box's display | Your GNOME desktop | The portal on any desktop, and the phone app |
 | Updates | Whole-system A/B updates with automatic rollback | The same. Your files, accounts and settings stay; software installed with `apt` does not | Planned: staged across a fleet |
 | Many machines | One portal can list several boxes (Preview) | One computer | Planned: fleet management |

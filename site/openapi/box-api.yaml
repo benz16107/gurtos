@@ -57,8 +57,9 @@ info:
 
     ## Remote access
 
-    The remote access, push and Quick Start routes work against a relay. A hosted relay is not running
-    during the preview, so point the box at a relay you run, with `BOX_RELAY` or `PUT /remote/relay`.
+    The remote access, push and Quick Start routes work against a relay. There is no hosted relay and no
+    default: point the box at a relay you run, with `BOX_RELAY` or `PUT /remote/relay`. With none set, these
+    routes answer `409` at once with a sentence that says so, and the box makes no request.
 
     ## Not under /api
 
@@ -104,7 +105,7 @@ tags:
   - name: Sign-in
     description: 'Preview. Work-account sign-in (OpenID Connect) on a GurtOS Business box. These routes are open: they say nothing private.'
   - name: Remote access
-    description: A box's own https address through a relay, and which relay it uses. A hosted relay is not running during the preview.
+    description: A box's own https address through a relay, and which relay it uses. There is no hosted relay, and no default.
   - name: Push notifications
     description: Notifications on a phone when a task needs an OK. They go through the relay, so they need remote access on.
   - name: Quick Start
@@ -154,7 +155,7 @@ paths:
         computer is still downloading Droid stays `queued` and starts once Droid is there. While the agents
         are paused, every new task stays `queued`.
 
-        Defaults: `workspace` is `home`, `worker` is `droid`, `tools` are empty and `source` is `api`. A task
+        Defaults: `workspace` is `home`, `worker` is the setting `defaultAgent`, `tools` are empty and `source` is `api`. A task
         that names no `budgetCents` gets Settings `defaultBudgetCents` (100 unless changed). A task that names
         no `hosts` gets none, or Settings `defaultHosts` when `networkDefault` is `allowlist`. The workspace
         must exist and every tool must be installed. A field the box does not know is a 400 that names it.
@@ -585,7 +586,7 @@ paths:
         one made from Droid's own question.
 
         An Apple Watch token may approve only up to Settings `watchLimitCents`, never on a Business box,
-        never a Shopper purchase, and only with `auth: wrist`. Otherwise the answer is 403 with
+        not a purchase made with a passkey, and only with `auth: wrist`. Otherwise the answer is 403 with
         `needs: iphone` and the request keeps waiting. A Watch may always deny. On a GurtOS Business box
         only a person answers, never their own request, only what the policy sends to them and only within
         their limit. A refusal is 403 with the reason, and the request keeps waiting.
@@ -1043,7 +1044,7 @@ paths:
                       properties:
                         id: { type: string, enum: [key, droid, owner, phone] }
                         text: { type: string }
-              example: { ok: false, missing: [{ id: key, text: 'No model key yet: set ANTHROPIC_API_KEY or FACTORY_API_KEY.' }] }
+              example: { ok: false, missing: [{ id: key, text: 'No model service yet: add an Anthropic, OpenAI or Factory key, a local model through Ollama, or your own endpoint in Settings, Agents & Models.' }] }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /setup/code:
@@ -1514,15 +1515,15 @@ paths:
       summary: Remote access state
       description: |
         Whether the box has its own https address through a relay, and whether the tunnel is up. The box
-        checks the address again at most every 30 seconds, so a dropped tunnel shows. A hosted relay is not
-        running during the preview. Point the box at a relay you run with `PUT /remote/relay` or `BOX_RELAY`.
+        checks the address again at most every 30 seconds, so a dropped tunnel shows. `relay` is `null` when no
+        relay is set: point the box at a relay you run with `PUT /remote/relay` or `BOX_RELAY`.
       responses:
         '200':
           description: The state.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RemoteState' }
-              example: { enabled: true, name: rosa, url: 'https://rosa.box.example.com', state: connected, relay: box.example.com }
+              example: { enabled: true, name: rosa, url: 'https://rosa.relay.example.com', state: connected, relay: relay.example.com }
     post:
       tags: [Remote access]
       operationId: enableRemote
@@ -1556,7 +1557,7 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409':
-          description: The name is taken or reserved, or this box already has another name. Turn remote access off first to change it.
+          description: The name is taken or reserved, this box already has another name (turn remote access off first to change it), or no relay is set.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1625,7 +1626,7 @@ paths:
       tags: [Remote access]
       operationId: getRelay
       summary: The relay in use
-      description: The relay the box uses, the box's default (`BOX_RELAY`, else `https://box.gurtos.com`, which is not running during the preview), and whether the owner chose this one.
+      description: The relay the box uses, the box's default (`BOX_RELAY`), and whether the owner chose this one. `url` and `default` are `null` when no relay is set.
       responses:
         '200':
           description: The relay.
@@ -1635,8 +1636,8 @@ paths:
                 type: object
                 required: [url, default, custom]
                 properties:
-                  url: { type: string, example: 'https://relay.example.com' }
-                  default: { type: string }
+                  url: { type: ['string', 'null'], example: 'https://relay.example.com' }
+                  default: { type: ['string', 'null'] }
                   custom: { type: boolean, description: True when the owner chose `url` with `PUT /remote/relay`. }
     put:
       tags: [Remote access]
@@ -1655,7 +1656,7 @@ paths:
               type: object
               required: [url]
               properties:
-                url: { type: ['string', 'null'], description: 'The relay''s address. `null` goes back to the default.' }
+                url: { type: ['string', 'null'], description: 'The relay''s address. `null` goes back to `BOX_RELAY`, or to none.' }
             example: { url: 'https://relay.example.com' }
       responses:
         '200':
@@ -1800,7 +1801,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '502':
-          description: 'The push was not sent, with the reason in a sentence, such as "The notification was not sent: the relay at box.example.com isn''t answering."'
+          description: 'The push was not sent, with the reason in a sentence, such as "The notification was not sent: the relay at relay.example.com isn''t answering."'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1811,7 +1812,7 @@ paths:
       operationId: startQuickStart
       summary: Start Quick Start on a new computer
       description: |
-        Only on the new computer's own screen (anyone else gets 403), and only during setup (else 409). Makes
+        Only on the new computer's own screen (anyone else gets 403), and only during setup (else 409, or 409 when no relay is set). Makes
         a one-time key and a rendezvous slot at the relay, valid for 10 minutes. Show `url` as a QR code and
         the four-word `phrase` beside it. The owner's phone scans the code and asks a computer it owns to
         send. The relay sees only ciphertext.
@@ -2546,14 +2547,17 @@ components:
           description: A folder in `BOX_HOME/workspaces`. The task works on its own copy of it.
         worker:
           type: string
-          enum: [droid, fake]
-          default: droid
-          description: '`droid` is Droid with Claude. `fake` runs scripted steps with no model, for tests.'
+          enum: [droid, claude, codex, opencode, fake]
+          description: 'The agent: `droid` (Factory''s Droid), `claude` (Claude Code), `codex` (Codex CLI) or `opencode`. `fake` runs scripted steps with no model, for tests. Default: the setting `defaultAgent`.'
+        agent:
+          type: string
+          enum: [droid, claude, codex, opencode, fake]
+          description: The same as `worker`, under the name the screens use. Send one of the two.
         tools:
           type: array
           items: { type: string }
           default: []
-          description: Tool names the task may call through its broker, such as `wallet.pay`.
+          description: Tool names the task may call through its broker, such as `example.spend`.
         hosts:
           type: array
           items: { type: string }
@@ -2562,7 +2566,7 @@ components:
           description: 'Hosts the task''s network may reach: `example.com` (any port), `example.com:8080` (one port) or `*.example.com` (subdomains). Never `localhost`, a loopback or link-local address, or a whole top-level domain.'
         model:
           type: string
-          description: 'Droid worker: the Claude model. `haiku` (cheap checks), `sonnet` (most work, the default), `opus` (hard tasks), or a full model id that starts with `claude-`. The task records the id it ran on.'
+          description: 'The model. `haiku`, `sonnet` or `opus`, or a full model id. A model service in front picks where it runs: `ollama/qwen3` (a local model), `custom/my-model` (your own endpoint), `openai/<id>`. Left out: the agent''s default. Droid runs Claude models only. The task records what it ran on.'
         budgetCents:
           type: integer
           minimum: 0
@@ -2918,6 +2922,10 @@ components:
         paused: { type: boolean, default: false, description: 'The kill switch. While true no task starts (new ones stay `queued`) and running ones hold before their next step, tool call or question. The box sets it itself at start when `permissions.json` cannot be read.' }
         networkDefault: { type: string, enum: [none, allowlist], default: none, description: 'With `allowlist`, a task that names no hosts gets `defaultHosts`.' }
         defaultHosts: { type: array, items: { type: string }, default: [], maxItems: 100 }
+        defaultAgent: { type: string, enum: [auto, droid, claude, codex, opencode], default: auto, description: 'The agent of a task that names none. `auto` is the first agent that has a model service set up, Droid first.' }
+        ollamaHost: { type: string, default: '', description: 'Where Ollama listens, like `http://127.0.0.1:11434`. Empty: no local model.' }
+        customBaseUrl: { type: string, default: '', description: 'Your own model endpoint (LiteLLM, a company gateway), without `/v1`. Its key, if it wants one, is `CUSTOM_API_KEY` in the vault. Empty: off.' }
+        customWire: { type: string, enum: [anthropic, openai], default: anthropic, description: The format your own endpoint speaks. }
         agentFolders: { type: array, items: { type: string }, default: [], maxItems: 50, description: 'Personal. Folders agents may be given besides the owner''s home. Never the system or the box''s own state.' }
         quietHours:
           type: object
@@ -3159,7 +3167,7 @@ components:
         url: { type: ['string', 'null'], description: The box's own https address. }
         state: { type: string, enum: [off, starting, connected, error] }
         error: { type: string, description: 'Why it failed, in words. If the relay no longer holds this box''s name (freed after 30 days offline, or given to another computer), it says to turn remote access off and on again.' }
-        relay: { type: string, description: The relay's host name. }
+        relay: { type: ['string', 'null'], description: The relay's host name, or null when no relay is set. }
 
     QuickStartState:
       type: object

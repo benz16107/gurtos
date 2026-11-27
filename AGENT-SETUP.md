@@ -4,6 +4,33 @@ Hand a new GurtOS computer (Server or Personal) to an AI agent on another comput
 owner does a few things at the new computer; the agent does the rest over the network and stops only where the
 owner is needed.
 
+There are two starting points. On an Ubuntu 24.04 machine the agent can reach over ssh, the agent installs GurtOS
+itself ([Install on an Ubuntu machine](#install-on-an-ubuntu-machine), next). On a computer installed from the GurtOS
+disc, the owner starts setup on its screen ([What the owner does first](#what-the-owner-does-first)).
+
+## Install on an Ubuntu machine
+
+The owner gives the agent ssh access to an Ubuntu 24.04 machine (a cloud server, a VM or a spare computer), as an
+account with sudo. Nothing on its disk is erased. Below, `host` is that ssh destination.
+
+1. **Install.** `ssh host 'curl -fsSL https://gurtos.com/install.sh | sh -s -- --yes'`. It prints what it will
+   change before it changes anything, then installs, and ends with how to open the portal. Read that list back to
+   the owner. Running it again updates GurtOS and keeps its data. It puts the ssh account in the `gurtos` group, so
+   that account's calls to `http://127.0.0.1:7700` on the machine act as the owner, with no token.
+2. **Model key.** Send it on stdin so it is not in a command line on the machine:
+   `printf '{"value":"%s"}' "$KEY" | ssh host "curl -s -X PUT http://127.0.0.1:7700/api/vault/ANTHROPIC_API_KEY -H 'content-type: application/json' -d @-"`
+   (or `FACTORY_API_KEY`). The box tries the key before saving it. **Stop for the owner** if they would rather not
+   give you the key: they open the portal with `ssh -L 7700:127.0.0.1:7700 host` and paste it in Settings.
+3. **Apps and spending** (optional): `ssh host "curl -s '127.0.0.1:7700/api/apps?all=1'"` lists the apps; the routes are
+   the same as steps 4 and 5 below (`core/README.md`, Setup, Settings, App Center and the vault).
+4. **Check and finish:** `ssh host curl -s 127.0.0.1:7700/api/setup/doctor` lists anything missing. When it is clean,
+   `ssh host curl -s -X POST 127.0.0.1:7700/api/setup/finish -H 'content-type: application/json' -d '{}'`.
+5. **Tell the owner** how to open the portal (the installer's last lines). Pairing a phone needs the API on an address
+   the phone reaches, such as a tailnet address (`BOX_LISTEN`, see the guide to approving from your phone).
+
+To remove it again: `ssh host 'curl -fsSL https://gurtos.com/install.sh | sh -s -- --uninstall --yes'`. This deletes
+the action log, the workspaces and the vault, so do it only when the owner asks.
+
 ## What the owner does first
 
 1. Start the new computer from the GurtOS disc and finish installing it.
@@ -21,8 +48,8 @@ cross the network unencrypted. Use a network you trust, or a private network tha
 
 Do not set up a cloud VM over its public address: the setup port answers only private networks, so the box's
 firewall refuses it, and the code, the token and the key would cross the internet unencrypted. Run setup in the provider's web console, which shows the box's screen, or join the VM to a private
-network such as Tailscale first. Remote access (`<name>.box.gurtos.com`) does not help here: it can only be turned on during or after setup,
-and it needs a relay (step 6).
+network such as Tailscale first. Remote access (an address on a relay) does not help here: it can only be turned on during or after setup,
+and it needs a relay you run (step 6).
 
 ## What the agent does
 
@@ -66,9 +93,9 @@ The steps, in order:
    its own needs `gurtos key set <NAME>` first. Apps marked as test only use test money.
 5. **Spending:** `gurtos budget 5 1` asks before any single spend over $5 and gives a task $1 (the defaults).
 6. **Remote access** (optional, usually skip): `gurtos remote on [name]` asks a relay for an `https://<name>...`
-   address. The hosted relay at `box.gurtos.com` is offline, so this fails with a message saying the relay cannot be
-   reached, unless the owner runs their own relay ([docs/self-host.md](docs/self-host.md)) and the computer points
-   at it. Setup does not need it.
+   address. There is no hosted relay, so this fails at once with a sentence saying how to get remote access, unless
+   the owner runs their own relay ([docs/self-host.md](docs/self-host.md)) and the computer points at it. Setup does
+   not need it.
 7. **The owner's phone:** `gurtos pair` prints a code and two links. `boxUrl` is the computer's own pairing page;
    `url` goes through app.gurtos.com and needs a relay. **Stop for the owner:** give them the `boxUrl` link to open on
    their phone, which must be on the same network as the computer. It pairs as the owner's phone.

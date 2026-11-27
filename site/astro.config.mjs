@@ -75,8 +75,8 @@ export default defineConfig({
         {
           label: 'Get started',
           items: [
-            'docs/get-started/install-server',
             'docs/get-started/install-on-ubuntu',
+            'docs/get-started/install-server',
             'docs/get-started/first-boot',
             'docs/get-started/install-personal',
             'docs/get-started/first-task',
@@ -103,6 +103,7 @@ export default defineConfig({
         {
           label: 'How-to guides',
           items: [
+            'docs/guides/choose-your-agent',
             'docs/guides/approve-from-your-phone',
             'docs/guides/undo-a-task',
             'docs/guides/keep-or-undo',
@@ -142,12 +143,7 @@ export default defineConfig({
           label: 'Optional apps',
           collapsed: true,
           items: [
-            'docs/guides/connect-jira',
-            'docs/guides/send-the-log-to-elastic',
-            'docs/guides/asi-one',
             'docs/guides/verify-a-receipt',
-            'docs/guides/agent-payments',
-            'docs/guides/shopping-agent',
           ],
         },
         {

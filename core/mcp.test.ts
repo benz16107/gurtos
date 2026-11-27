@@ -43,3 +43,31 @@ test('the MCP relay lists broker tools and passes calls through with stable keys
   child.kill();
   broker.close();
 });
+
+test('with BOX_MCP_WAIT a call waits through pending answers for the owner, without it the agent hears pending', async () => {
+  const sock = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-')), 'broker.sock');
+  let asked = 0;
+  const broker = http.createServer(async (req, res) => {
+    for await (const _ of req);
+    if (req.url === '/tools') return res.end('[]');
+    asked++;
+    res.end(JSON.stringify(asked % 3 ? { ok: false, pending: true, error: 'Waiting for the owner.' } : { ok: true, output: 'paid' }));
+  });
+  await new Promise<void>((r) => broker.listen(sock, r));
+  const once = async (env: object) => {
+    const child = spawn(process.execPath, ['--experimental-strip-types', '--disable-warning=ExperimentalWarning', new URL('./workers/mcp.ts', import.meta.url).pathname], {
+      env: { ...process.env, BOX_SOCKET: sock, ...env },
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
+    const lines = readline.createInterface({ input: child.stdout! })[Symbol.asyncIterator]();
+    child.stdin!.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'shop__buy', arguments: {} } }) + '\n');
+    const text = JSON.parse((await lines.next()).value).result.content[0].text;
+    child.kill();
+    return text;
+  };
+  assert.equal(await once({ BOX_MCP_WAIT: '1' }), '"paid"');
+  assert.equal(asked, 3);
+  assert.equal(await once({}), 'Waiting for the owner.'); // Droid's way: it calls again itself
+  assert.equal(asked, 4);
+  broker.close();
+});

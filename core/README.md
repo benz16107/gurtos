@@ -16,8 +16,9 @@ namespaces or reach D-Bus, and gets at most 2 GB of memory. Its changes stay in 
 of the workspace's view. **Undo** takes one layer out of the stack. Other tasks keep theirs, and the base
 files are never written.
 
-The worker inside a task is Droid with Claude (`worker: 'droid'`), or a scripted fake for tests
-(`worker: 'fake'`, see `workers/fake.ts`).
+The worker inside a task is an agent the owner picks: Factory's Droid (`worker: 'droid'`), Claude Code (`claude`),
+Codex CLI (`codex`) or opencode (`opencode`), or a scripted fake for tests (`worker: 'fake'`, see `workers/fake.ts`).
+`agent` is the same field under the name the screens use. See "Agents and model services" below.
 
 Workspaces are folders in `BOX_HOME/workspaces`. `home` always exists and is the default. A track makes its
 own with `box.workspace(name, fromDir)`, for example from a git clone or its case files.
@@ -54,13 +55,53 @@ path, such as the account's files or batches, or running a Factory-hosted connec
 that is not JSON is a 415 and a `net.blocked` event, a call is at most 32 MB and a task's calls being read at once 64
 MB in all (413). A task may hold at most 256 connections to the proxy at once.
 
-**One model key is enough: Factory's or your own Anthropic key.** With `FACTORY_API_KEY` in the vault, Droid uses
+**Agents and model services.** Two tables decide what a task's agent may do.
+
+- `core/upstreams.ts` lists the model services ("upstreams"): `anthropic` (`ANTHROPIC_API_KEY`, sent as `x-api-key`),
+  `openai` (`OPENAI_API_KEY`, sent as `Authorization: Bearer`), `factory` (Droid's own), `ollama` (no key; the address
+  is the setting `ollamaHost`) and `custom` (the owner's own endpoint: settings `customBaseUrl` and `customWire`,
+  `anthropic` or `openai`, with the optional `CUSTOM_API_KEY` sent in both headers).
+- `core/workers/index.ts` lists the agents (`WorkerDef`): the npm package and version the box installs on first use
+  (into `BOX_HOME/agents/<name>`, or `BOX_AGENTS`), the upstreams it may use, how its model is checked, and the
+  environment and home files that point it at the proxy.
+
+An agent is given `http://127.0.0.1:<proxy port>/up/<upstream>` as its base address and
+`box-placeholder-the-box-adds-the-key` as its key. The proxy finds the task by the caller's uid, checks that the task's
+agent lists that upstream and that it is set up (403 or 503 otherwise), relays only that format's paths
+(`/v1/messages`, `/v1/messages/count_tokens`, `/v1/models`; or `/v1/responses`, `/v1/chat/completions`, `/v1/models`),
+reads the body as above, drops whatever the task put in `authorization`, `x-api-key`, `api-key` and
+`proxy-authorization`, writes the vault's key in, and sends the call on. The placeholder is never forwarded. Ollama
+and the owner's endpoint are reached by the box itself, so they need no entry in a task's hosts, and a task cannot
+reach their other paths (Ollama's `/api/pull`, say).
+
+A model call that carries a server-side web tool (`web_search_*`, `web_fetch_*`, `web_search_preview`, or
+`web_search_options`) is a 403 and a `net.blocked` event, like the other fetches: the service would reach the internet
+for the task, around its allow-list. It passes only when the tool names `allowed_domains` and the task's hosts allow
+every one of them. The agents' own settings also switch those tools off.
+
+| Agent | Run as | Pointed at the proxy by | Steps and tool calls |
+|---|---|---|---|
+| `claude` | `claude -p --output-format stream-json --verbose --setting-sources user --strict-mcp-config --permission-mode bypassPermissions` | `ANTHROPIC_BASE_URL`, and the task user's `~/.claude/settings.json` (the only settings file read: one in the workspace cannot redirect it) | stream-json lines become steps; `workers/hook.ts` as its PreToolUse (Bash) and PostToolUse hooks; `workers/mcp.ts` |
+| `codex` | `codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox` | `~/.codex/config.toml`: `[model_providers.box]` with `base_url`, `env_key`, `wire_api = "responses"`; `web_search = "disabled"` | JSON lines become steps; `[mcp_servers.box]` is `workers/mcp.ts` |
+| `opencode` | `opencode run --format json --auto` | `OPENCODE_CONFIG_CONTENT` (it wins over an `opencode.json` in the workspace) | JSON lines become steps; `mcp.box` is `workers/mcp.ts` |
+| `droid` | the Droid SDK (`workers/droid.ts`) | `FACTORY_API_BASE_URL` and the box's CA, below | its own handlers, hooks and `workers/mcp.ts` |
+
+A task's `model` may carry the upstream in front (`ollama/qwen3`, `custom/my-model`, `openai/<id>`); without one the
+agent's first upstream that is set up is used. A task that names no agent gets the setting `defaultAgent` (`auto`: the
+first agent with an upstream set up, Droid first). `GET /api/setup` and `GET /api/system` report
+`agents: {default, setting, list: [{name, title, upstreams, via, ready, installed}], upstreams: [{id, title, ready, key?, keySet?}]}`.
+An agent the box has not installed yet makes its first task wait (`queued`, "downloading" as its step). Claude Code and
+Droid ask the owner before a risky shell command; Codex and opencode do not ask before commands, and the second look
+below is Droid's only. Adding an agent is one entry in the table and one script that runs its command
+(`workers/cli.ts` has the shared part).
+
+**One model key is enough for Droid: Factory's or your own Anthropic key.** With `FACTORY_API_KEY` in the vault, Droid uses
 Factory. With only `ANTHROPIC_API_KEY`, the box writes a bring-your-own-key model into the task user's
 `~/.factory/settings.json` (the task's model, and Haiku for the second look, with a placeholder key) and runs Droid on
 `custom:<model>`; the proxy relays `api.anthropic.com` and puts the real key in the `x-api-key` header. Droid's own
 calls to Factory get a 503 then, and the task carries on. With neither, a Droid task fails at once with "No model key
 yet. Add an Anthropic or Factory API key in Settings, Accounts & Keys, then start the task again." `GET /api/setup` and
-`GET /api/system` report `model: {ready, via: 'factory' | 'anthropic' | null}`.
+`GET /api/system` report `model: {ready, via: 'factory' | 'anthropic' | 'openai' | 'custom' | 'ollama' | null}`.
 
 **Droid arrives after the first start.** Its license keeps it out of the image, so a new GurtOS computer downloads it
 (about 300 MB) and writes how that goes to `/run/box-os/droid` (`state=`, `message=`, `at=`). A Droid task made before
@@ -125,7 +166,7 @@ Settings, Accounts & Keys.", "This computer's disk is full. Free some space, the
 ("GurtOS could not set this task up (mount failed)..."), and the whole message goes to the journal.
 
 **Notes have text.** A `note` the core writes carries `text`, a sentence for Activity and Audit ("Setup: network
-step done", "Key saved: ANTHROPIC_API_KEY", "App turned on: Mana"). Show `text` when it is there.
+step done", "Key saved: ANTHROPIC_API_KEY", "App turned on: Find"). Show `text` when it is there.
 
 **Names and defaults.** The computer's name is the one given in setup's `name` step (`boxName`, up to 40
 characters), else `BOX_NAME`, else its id. A new box asks before any single spend over $5
@@ -214,10 +255,10 @@ it; don't keep a second copy of the state in a track, or two apps (and two scree
   budget or the owner's threshold. The core's `askFor` makes the approval, one per action (a retry reuses it),
   with `question`, `costCents`, `payee` and `purpose` (a tool fills the last two with `approval(input)`).
 - Every answer goes through one function, `answer(id, approved, by)`: the API, the SpacetimeDB `answer` reducer
-  (vouched connections only), a phone, a Jira or JSM button, ASI:One, a passkey. A track answers with
+  (vouched connections only), a phone, an app's panel or button, a chat, a passkey. A track answers with
   `box.answer(...)`. `by` names the device or person, never what a caller typed.
 - **Extend it, don't fork it.** Business adds who may answer and who was asked (`route`, checked before
-  `answer`). Push notifies on `approval.asked`. A passkey (Shopper) verifies, writes a `note`, then calls
+  `answer`). Push notifies on `approval.asked`. A passkey app verifies, writes a `note`, then calls
   `box.answer`. A tool that must not run without a stronger approval checks that itself before paying (for
   example, a passkey note in the log for this approval). No track keeps its own pending or approved state.
 
@@ -231,16 +272,16 @@ it; don't keep a second copy of the state in a track, or two apps (and two scree
   "upto") is checked and approved on its cap but may report `spentCents` (0 to the cap) in its output; the box
   counts that.
 - **Money only moves inside a tool** that the task calls through the broker, never from a route or a log reader.
-  That is what makes the budget, the approval and the log cover every payment (wallet, x402, Stripe, Visa).
+  That is what makes the budget, the approval and the log cover every payment (wallet, x402, card).
 - New spending rules (a per-merchant cap, a mandate, a daily limit) belong in this check in the core
   (`runTool`, next to the threshold), as Settings, so every paying app obeys them. Ask the core thread.
 
-**Guest requests** (a stranger asks the box for something: a Mana page, an ASI:One chat). One path, shared by
+**Guest requests** (a stranger asks the box for something: a public page, a chat). One path, shared by
 every front door: the request becomes a task that first waits for the owner's OK (an approval, as above), runs
 with no owner files and only the network and tools it was given, a small budget, and is undone if nobody answers.
 The limits (kinds allowed, per-guest and overall rate, how many may wait) are kept in one place, so two front
-doors can't double them. Until it moves into the core, Mana's `tracks/mana` route is that path, and other front
-doors (Fetch) call it rather than keep their own.
+doors can't double them. Until it moves into the core, no app in this repository implements it, and an app that
+adds a front door should call one shared route rather than keep its own.
 
 **Pausing.** Settings `paused` is the only pause: no task starts, running ones hold before their next step, tool
 call or question. Personal's switch and Business's kill switch both set it (Business may also freeze task units
@@ -263,10 +304,10 @@ so it goes through the same approvals, budgets and log as a phone, and it never 
 "Claude" from the box's screen, then:
 
 ```sh
-claude mcp add gurtos --env BOX_URL=https://<name>.box.gurtos.com --env BOX_TOKEN=<token> -- node /path/to/gurtos/core/claude-mcp.ts
+claude mcp add gurtos --env BOX_URL=https://<name>.relay.example.com --env BOX_TOKEN=<token> -- node /path/to/gurtos/core/claude-mcp.ts
 ```
 
-On the box itself, `BOX_URL=http://127.0.0.1:7700` and no token. Keep needs a device paired as the owner.
+On the box itself, `BOX_URL=http://127.0.0.1:7700` and no token, run as root or as a member of the `gurtos` group. Keep needs a device paired as the owner.
 
 ## Tripwire keys and the task sandbox
 
@@ -317,8 +358,8 @@ Make `tracks/<name>/track.ts` and default-export a `Track` with any of these slo
 | `routes` | `'POST /hook': (req, box) => Response`, served at `/t/<name>/hook` on the box's API. Webhooks go here. |
 | `secrets` | Vault keys this track's routes and triggers may read with `box.secret(name)`. Tools and jobs declare their own. |
 | `optionalSecrets` | Keys among the app's declared secrets it can run without (it falls back to test mode). The App Center marks them `optional: true`, and setup asks only for the others. |
-| `x-box-caller` | Not a slot: a header on the Request every route gets, set by the box (a copy the caller sends is replaced): `screen` (the box's own screen), `owner` (a phone paired as the owner), `device:<id>` (another paired phone), `service` (a helper on the box) or `none` (an open route reached through a proxy with no token). On a Business box, `x-box-person` carries the calling person's id (absent otherwise); the `box` the route gets already acts as that person. |
-| `openRoutes` | Route keys (like `'GET /status'`) that need no paired-phone token, even for a request that arrives through a public proxy. For a route that is public on purpose, or checks its own secret (the Jira panel's routes). Every other route needs a phone. An open route must return nothing private unless its own check passes. |
+| `x-box-caller` | Not a slot: a header on the Request every route gets, set by the box (a copy the caller sends is replaced): `screen` (the box's own screen), `owner` (a phone paired as the owner), `device:<id>` (another paired phone) or `none` (an open route reached with no token). On a Business box, `x-box-person` carries the calling person's id (absent otherwise); the `box` the route gets already acts as that person. |
+| `openRoutes` | Route keys (like `'GET /status'`) that need no paired-phone token, even for a request that arrives through a public proxy. For a route that is public on purpose, or checks its own secret. Every other route needs a phone. An open route must return nothing private unless its own check passes. |
 | `ownOrigin` | Route keys whose HTML page is served with the box's own origin instead of the sandbox (*An app's window*): only for a page that cannot work without one, such as a passkey ceremony. It runs with the box's origin, so review it like core code. The window token and every other rule still apply. |
 
 Rules:
@@ -342,7 +383,7 @@ import { schedule, webhook, onFileChange } from '../../core/triggers.ts';
 
 triggers: [
   schedule({ name: 'nightly', dailyAt: '02:00', task: () => ({ title: 'Nightly report', prompt: '...' }) }),
-  webhook({ name: 'jira', task: (payload) => ({ title: payload.issue, prompt: `Fix ${payload.issue}` }) }),
+  webhook({ name: 'issue', task: (payload) => ({ title: payload.issue, prompt: `Fix ${payload.issue}` }) }),
   onFileChange({ name: 'inbox', dir: '/var/lib/box/inbox/mytrack', task: (file) => ({ title: file, prompt: `Process ${file}` }) }),
 ]
 ```
@@ -372,8 +413,9 @@ copies them into each run's vault.
 ## Setup, Settings, App Center and the vault
 
 What the first-run wizard, Settings and the App Center are built on. **Who may call what.** Anything that
-changes setup, settings, apps or the vault is for the owner only: the box's own screen (a request from this
-machine, or over its socket, with no proxy header such as `X-Forwarded-For`) or a phone paired as the owner. A
+changes setup, settings, apps or the vault is for the owner only: the box's own screen (a request over its socket,
+or from this machine by root, the owner's account or a member of the `gurtos` group, with no proxy header such as
+`X-Forwarded-For`) or a phone paired as the owner. A
 request relayed by a reverse proxy or a tailnet serve looks local to the box but carries those headers, so it
 does not count. Everything else gets a `403`. Reads of `/api/setup`, `/api/settings`, `/api/system` and `/api/apps`
 are open like the rest of the API. To pair the owner's phone, the box's own screen calls
@@ -382,7 +424,7 @@ The `owner` flag is ignored from anyone who is not already the owner.
 
 | Request | Does |
 |---|---|
-| `GET /api/system` | `{product, edition, editionName, version, build, hostname, timezone, network: {online, interfaces}, boxId, boxName, owner, model, droid, paused, startedAt, uptimeSec}`. `build` is the commit `./deploy` installed. |
+| `GET /api/system` | `{product, edition, editionName, install, version, build, hostname, timezone, network: {online, interfaces}, boxId, boxName, owner, model, droid, paused, startedAt, uptimeSec}`. `build` is the commit `./deploy` installed. `install` is `image` (a GurtOS image, updated as a whole system) or `checkout` (installed on Ubuntu with `install.sh`). |
 | `GET /api/setup` | `{model, droid, modelKey, done, finishedAt, migrated, steps: {id: {at, data?}}, suggested: [...], channel}`. **Until `done`, the box's screen shows the wizard.** `modelKey` is false until the vault holds `ANTHROPIC_API_KEY` or `FACTORY_API_KEY`; without one no Droid task can start, so the wizard should ask for it (`PUT /api/vault/<NAME>`, which takes effect at once). `droid` is where Droid's download stands (above). A box that already ran tasks when this arrived is `migrated` and counts as done. |
 | `POST /api/setup/step {id, data?}` | Records a step as taken (any id like `network`; `suggested` lists the usual ones). `data` is at most 4 KB and is for answers, not keys: keys go to the vault. |
 | `POST /api/setup/finish`, `POST /api/setup/reopen` | Mark setup done, or show the wizard again. |
@@ -400,6 +442,8 @@ The `owner` flag is ignored from anyone who is not already the owner.
 - `watchLimitCents` (2500): the most an Apple Watch token may approve (below, "The native apps"). 0: a Watch may only deny.
 - `networkDefault` (`none`) and `defaultHosts` (`[]`): with `allowlist`, a task that names no hosts gets `defaultHosts`; a task that names its own keeps them.
 - `agentFolders` (`[]`): Personal. Folders agents may use besides the owner's home. Can't include the system or the box's own state. Empty means only the owner's home.
+- `defaultAgent` (`auto`): the agent of a task that names none: `auto`, `droid`, `claude`, `codex` or `opencode`.
+- `ollamaHost` (`""`), `customBaseUrl` (`""`) and `customWire` (`anthropic` | `openai`): where a local model and the owner's own model endpoint are. Empty is off.
 - `quietHours` (`{enabled: false, from: "22:00", to: "07:00"}`): read by the desktop and phone for notifications.
 - `paused` (false): Pause all agents. While true no task starts (new ones stay `queued`) and running ones hold before their next step, tool call or question; false resumes them all. Enforced by the core.
 - `logRetentionDays` (365), `updateChannel` (`stable` | `beta`), `autoUpdate` (true), `appearance` (`{theme: light | dark | system, accent: "#rrggbb" or ""}`): stored for the screens and the updater to read.
@@ -417,9 +461,24 @@ it again with no reinstall. The choice is saved in `apps.json`, so it survives a
 
 ## Who may reach the API
 
-**From the box's own screen** (a request on this machine, over the socket or loopback, with no proxy header, a
-`Host` that is `127.0.0.1`, `localhost` or `[::1]`, and no `Origin` other than the box's own address on the API's
-port) the API is open, as it always was. A web page from another site in a browser on the box (GurtOS Personal)
+**From the box's own screen** (a request over the root-only socket, or from loopback with no proxy header, a
+`Host` that is `127.0.0.1`, `localhost` or `[::1]`, no `Origin` other than the box's own address on the API's port,
+and from a trusted account) the API is open, with the owner's rights. The trusted accounts are root, the Personal
+owner (`BOX_OWNER`, or the owner set with `PUT /api/owner`) and members of the `gurtos` group, which the installer
+creates and adds you and the Server screen's `kiosk` account to. The box finds the account behind a loopback
+connection in `/proc/net/tcp` (`uidOf`, the same lookup the proxy uses for tasks) and checks it against
+`/etc/passwd` and `/etc/group` once per connection (`trustedUid` in `net.ts`). **Any other account on the machine**
+(another person's login, a service such as `nobody`, a task user) is treated like a phone: no token, `401`.
+
+Why this and not a token: the clients that act as the screen are a browser on the machine, the box's kiosk, the
+Personal desktop windows, `curl` and the CLI, and `ssh -L` from your laptop (the forwarded connection belongs to
+your login). All of them already run as some account, so checking that account needs no token file, no sign-in
+link and no change to any client. A root-only Unix socket with `SO_PEERCRED` would be as sound, but a browser cannot
+use one. A token file readable by a group needs the same group, and a browser still cannot read it. Group
+membership is read from the files, so `sudo usermod -aG gurtos <you>` takes effect on the next connection, without
+logging in again. Local accounts only: a group from LDAP or sssd is not seen.
+
+A web page from another site in a browser on the box (GurtOS Personal)
 also arrives from loopback, but its `Origin` gives it away, and a page that points its own name at 127.0.0.1 (DNS
 rebinding) sends its own `Host`; both are treated as remote and need a paired token. So does a page any other
 server on this machine serves (an agent's dev server on `localhost:8000`), unless its origin is in `BOX_ORIGINS`. **From anywhere else every request must carry a paired phone's token**, as
@@ -464,7 +523,7 @@ the page's own `fetch` calls, and `/kit/gurtos.js` carries it on links, forms an
 browser makes by itself (a `<script type="module" src>`, an `<img>`) carries no header: add `location.search` to its
 address, as `tracks/spacetime/app/index.html` does. A page that cannot work without a real origin (a passkey
 ceremony) is listed in the track's `ownOrigin` and served without the sandbox, with the box's own origin: only
-Shopper's Face ID page (`GET /approve`), which the phone opens top level. Such a page is reviewed like core code: it
+the example app's `GET /approve` page does. Such a page is reviewed like core code: it
 shows an agent's text only escaped and loads nothing from another site. An app answers only the requests of tasks
 its own box made (`task.app`, whatever `source` it gave), and its box may not undo a task whose changes the owner
 kept in their folder (403); the owner undoes that. Window tokens live in memory: after a restart, an old one gets a
@@ -567,7 +626,7 @@ contains (`Fraud referrals`), `Requests from the credit desk` (the app), or word
 $500`). Who: a name people approve for (`the Controller`, `IT`), or a role (`any approver`, `an admin`, `the owner`).
 A request matching no rule goes to the owner. `PUT /api/business {policy}` refuses a line it can't read and names it.
 
-**Rules from outside** (Mana drafts them in a chat). A track reads the rules with `box.policy()` and proposes new text
+**Rules from outside** (an app drafts them in a chat). A track reads the rules with `box.policy()` and proposes new text
 by starting a task that asks for an OK whose question carries `[policy <hash>]` (the first 12 hex characters of the
 text's SHA-256). Once that request is approved, `box.setPolicy(text, approvalId)` applies the text, but only if the
 request came from one of the track's own tasks and was approved by an owner or an admin, never by an approver, an agent
@@ -586,8 +645,8 @@ spend or the largest dollar figure in the question up to its first "?" (not the 
 **Who may answer** (`POST /api/approvals/<id>`, and `box.answer` from a track), checked again at the moment of the
 answer against the people as they are now. Each refusal is a `403` with the reason and a `business` note in the log.
 
-1. Only a person. A tool, a trigger, a log reader, a helper service on the box (running as nobody or a task user) or
-   a screen that has not said who it is gets "Only a person can answer". No agent approves an agent.
+1. Only a person. A tool, a trigger, a log reader or a screen that has not said who it is gets "Only a person can
+   answer". Another account on the box (a helper service, a task user) is not the screen and needs a token first. No agent approves an agent.
 2. Never your own request: "You asked for this, so someone else has to answer it."
 3. Only an owner, admin or approver, and only what the policy sends to a name they approve for.
 4. Approving only within your limit. Denying above it is allowed.
@@ -599,8 +658,8 @@ only the requests routed to them (the `my_requests` view over the private `reque
 public `approval` table still holds every approval for the box's own screens. They answer with `answerRequest`; the first answer wins in the database, and the box then runs these same
 checks as that person (`answerAs`). If the checks refuse it, the request goes back to pending.
 
-**Outside panels on a Business box** (the Jira panel, JSM, ASI:One through Fetch) answer only as a person: the track
-verifies its own credential, maps it to a person (the Jira track keeps a Jira account id to person id list), and calls
+**Outside panels on a Business box** (an issue-tracker panel, a chat agent) answer only as a person: the track
+verifies its own credential, maps it to a person (the track keeps a list from its own account ids to person ids), and calls
 the API over the box's socket with `x-box-person`. Without a mapped person an outside panel can still read and Undo,
 but its Approve is refused, so turning Business on never lets an unknown outside account approve.
 
@@ -720,7 +779,7 @@ until it is removed, its person is removed, or a later sign-in is refused.
 **Why it is here: the path to production.** A company should not hand an agent its credit desk on day one. Shadow
 mode is how a seat earns it, and it is GurtOS Business's answer to the "path to production" criterion: a one-week
 pilot, a number that says whether the agent decides the way the company's people do, a bar written in the policy, and
-one setting to go live or go back. [docs/pilot.md](../docs/pilot.md) is the plan.
+one setting to go live or go back.
 
 - **The setting.** `PUT /api/business {shadow: ["Credit analyst"]}`, from an admin or the owner, puts seats in shadow;
   `{shadow: []}` takes them all live. Each change is a `business` note with the new list and who made it. Settings >
@@ -755,8 +814,7 @@ waits, a new task stays `queued`, and a reboot keeps it paused. Approvals can st
 task and starts the queued ones. Each pull is a `kill-switch` note with who pulled it and from which phone or screen.
 `GET /api/pause` (`{paused, by, at, via}`), `GET /api/system` (`paused`) and `GET /api/health` say whether it is on.
 Measured on a live run with 10 agents (3 Droid seats on Claude): stopped in 137 ms, every unit frozen in 271 ms, no
-agent event while paused, a bad batch undone in 48 ms. `docs/drill.md` has the drill and how to run it
-(`core/drill.ts`).
+agent event while paused, a bad batch undone in 48 ms. `core/drill.ts` is the drill; its header says how to run it.
 
 ## The API for the portal and the phone
 
@@ -771,7 +829,7 @@ answers without `/api`, which is what the demo and tracks use.
 | Request | Returns |
 |---|---|
 | `GET /api/tasks` | Every task: `id, title, state, source, workspace, costCents, budgetCents, step, summary, error, createdAt, updatedAt` |
-| `POST /api/tasks {title, prompt, workspace?, tools?, hosts?, budgetCents?}` | The new task. Workspace defaults to `home`, worker to Droid. A field the box doesn't know (a typo like `folders`) is refused with a 400 naming it. `folder` (Personal) is a real field: the owner's folder the task works a copy of, kept on the task. |
+| `POST /api/tasks {title, prompt, workspace?, agent?, model?, tools?, hosts?, budgetCents?}` | The new task. Workspace defaults to `home`, the agent to the setting `defaultAgent`. A field the box doesn't know (a typo like `folders`) is refused with a 400 naming it. `folder` (Personal) is a real field: the owner's folder the task works a copy of, kept on the task. |
 | `POST /api/tasks {..., files: [{name, data}]}` | Files shared to a new task (the Mac app's Share menu): 1 to 8, base64, 5 MB in all, plain names. They go to a new workspace whose name the box picks (`shared-<random>`), so the task's copy holds only them; a task with files can't name a workspace, folder or folders. The log keeps names and sizes, never the contents. |
 | `GET /api/tasks/<id>` | `{task, approvals, events}`: the task, its approvals, and its whole action log |
 | `GET /api/tasks/<id>/diff` | `{changes: [{path, change}], diff}`: what it added, modified or deleted, and a unified diff of the first 200 changed files (at most 200 KB; `changes` lists them all) |
@@ -783,10 +841,10 @@ answers without `/api`, which is what the demo and tracks use.
 | `GET /api/approvals?state=pending` | The inbox. Leave out `state` for all of them. |
 | `POST /api/approvals/<id> {approved: true or false, by: "portal", auth?}` | The approval. The first answer wins. `auth` is how a native app says it checked it was you (`face-id`, `touch-id`, `passcode`, `wrist`); the answer keeps it as reported, never as proof: "Ben's Watch (on the wrist, reported)", "Ben's iPhone (Face ID, reported)" (`by`, or `via` on Business). |
 | `GET /api/log?after=<seq>&task=<id>` | Log events, both filters optional (cursor polling) |
-| `GET /api/log/stream?after=<seq>&task=<id>` | The log as Server-Sent Events: replays from `after`, then streams new events live. For Elastic and Jira to follow without polling files. |
+| `GET /api/log/stream?after=<seq>&task=<id>` | The log as Server-Sent Events: replays from `after`, then streams new events live. For an outside reader to follow without polling files. |
 | `GET /api/apps` | Apps from tracks: `{name, title, href, track}`. Open `/t/<track><href>`. |
 | `GET /api/health` | `{ok, startedAt, resumed: [taskId...], tasks, tools, spacetime: {port, database}}`. `resumed` is the tasks boot restarted after a power cut, for the screen's session-restore banner. |
-| `GET /api/boxes` | This box and its peers (`BOX_PEERS`), so one portal lists and drives several boxes (the Vultr second box): `[{id, name, stdb, self}, ...]` |
+| `GET /api/boxes` | This box and its peers (`BOX_PEERS`), so one portal lists and drives several boxes (a second box): `[{id, name, stdb, self}, ...]` |
 | `POST /api/pair/start` | Owner. Mint a one-time pairing code for the box screen's QR: `{code, url, boxUrl?, expiresAt, box}`. `url` opens the GurtOS app (app.gurtos.com); `boxUrl` is the box's own pairing page, when `BOX_URL` or remote access gives it an address |
 | `POST /api/pair {code, name, kind?}` | A phone redeems the code for its own device token: `{token, box:{id,name}, device}`. One-time. `kind` is what the device says it is, `web` (default), `iphone` or `mac`; anything else is a 400. It is never used for a security decision. |
 | `POST /api/devices/self/watch {name}` | An `iphone` token only: a separate token for its Apple Watch, `{token, device}`, with the iPhone's Business person and nothing more: never `owner`, so Settings, keys, setup, apps and devices are refused. It can't vouch for a SpacetimeDB identity. A new one replaces the old; 3 an hour per iPhone. Revoking the iPhone, or removing its person, revokes it. |
@@ -803,7 +861,7 @@ What a screen needs, and where it comes from:
 - **Inbox:** the SpacetimeDB `approval` table where `state` is `pending`. Approve or Deny with the `answer`
   reducer, or `POST /api/approvals/<id>`.
 
-**Following the action log** (Elastic, Jira). An in-process track uses the `logReaders` slot: the core feeds
+**Following the action log** (an app that sends the log out). An in-process track uses the `logReaders` slot: the core feeds
 `read(event)` every event in order and saves a cursor, so it never polls files. An outside reader follows
 `GET /api/log/stream` (Server-Sent Events): each event is `id: <seq>` and `data: <json>`. On reconnect, pass
 `?after=<seq>` or the `Last-Event-ID` header and the box replays from there, then streams live. `GET /api/log?after=`
@@ -878,8 +936,8 @@ Column names are camelCase in the TypeScript client and snake_case in SQL (`cost
 
 ## Remote access and push notifications
 
-**Reach this computer from anywhere** (opt in, owner only) gives the box its own address, `https://<name>.box.gurtos.com`,
-through the GurtOS relay (`relay/README.md`). The box opens an outbound tunnel (frpc), so nothing is forwarded at
+**Reach this computer from anywhere** (opt in, owner only) gives the box its own address, `https://<name>.relay.example.com`,
+through a relay you run (`relay/README.md`). There is no hosted relay and no default: with none set, turning it on, push and Quick Start refuse at once with a sentence, and make no request. The box opens an outbound tunnel (frpc), so nothing is forwarded at
 home, and gets its own Let's Encrypt certificate (Caddy on 127.0.0.1). TLS ends on the box: the relay passes the
 encrypted bytes by name and cannot read them. Requests through it carry `X-Forwarded-For`, so they need a paired
 device's token like any other off-box request. Code: `core/remote.ts`. State: `BOX_HOME/remote.json`,
@@ -887,17 +945,16 @@ device's token like any other off-box request. Code: `core/remote.ts`. State: `B
 
 | Request | Does |
 |---|---|
-| `GET /api/remote` | `{enabled, name, url, state: off, starting, connected or error, error?, relay}`. Checks the address again at most every 30 s. |
+| `GET /api/remote` | `{enabled, name, url, state: off, starting, connected or error, error?, relay}`; `relay` is the relay's host, or `null` when none is set. Checks the address again at most every 30 s. |
 | `GET /api/remote/name/<name>` | Owner. Asks the relay: `{name, available, reason?}` |
 | `POST /api/remote {name}` | Owner. Enrolls the name, starts the tunnel and TLS, returns `state: starting`; poll until `connected` (5 to 60 s for a new certificate). Names: lowercase letters, digits and hyphens, 3 to 30 characters, some reserved. |
 | `DELETE /api/remote` | Owner. Stops both, releases the name at the relay (`released`), removes the secret. The certificate is kept for next time. |
-| `GET /api/remote/relay` | `{url, default, custom}`: the relay in use (`https://...`), the box's default (`BOX_RELAY`, else `https://box.gurtos.com`), and whether the owner chose this one |
-| `PUT /api/remote/relay {url}` | Owner, while remote access is off (`409` otherwise). Use your own relay (`relay/README.md`): an `https://` host name with no path, query or login, that resolves only to public addresses; anything else is a `400` naming why. `{url: null}` goes back to the default. Saved in `BOX_HOME/relay.json`. Pushes and Quick Start use the same relay. |
+| `GET /api/remote/relay` | `{url, default, custom}`: the relay in use (`https://...`), the box's default (`BOX_RELAY`), and whether the owner chose this one. `url` and `default` are `null` when no relay is set |
+| `PUT /api/remote/relay {url}` | Owner, while remote access is off (`409` otherwise). Use your own relay (`relay/README.md`): an `https://` host name with no path, query or login, that resolves only to public addresses; anything else is a `400` naming why. `{url: null}` goes back to `BOX_RELAY`, or to none. Saved in `BOX_HOME/relay.json`. Pushes and Quick Start use the same relay. |
 
-While it is on, `POST /api/pair/start` returns `url: https://app.gurtos.com/pair?box=<name>.box.gurtos.com#<code>` (the
-GurtOS app adds the box to its machines) and `boxUrl`, the box's own `https://.../pair#<code>`. With your own relay and
-the hosted app (which accepts only its own relay's addresses), `url` is the computer's own address on your relay,
-`https://<name>.<relay host>/pair#<code>`; `GET /api/boxes`
+While it is on, `POST /api/pair/start` returns `boxUrl`, the box's own `https://<name>.<relay host>/pair#<code>`. With the
+hosted app (which has no relay of its own), `url` is the same address. With your own app (`BOX_APP`), `url` is
+`https://<your app>/pair?box=<name>.<relay host>#<code>`, and the app adds the box to its machines; `GET /api/boxes`
 reports the https address. The API allows CORS from `https://app.gurtos.com` (always) and `BOX_ORIGINS`.
 
 **Push notifications** reach the GurtOS app on a phone. The app subscribes once with the relay gateway's VAPID key
@@ -915,7 +972,7 @@ encrypts each one for the phone (RFC 8291), so the gateway forwards bytes it can
 | `POST /api/push/test` | Send this device a test push: `{sent: 1}`, or `409` when remote access or notifications are off |
 
 The decrypted push is JSON: `{v: 1, type: 'approval' or 'test', machine: <box id>, box: <box name>, url: <box https
-origin>, id, task, source, title, body, costCents, mac}` (`source` is the task's, like `shopper:...`). `mac` is base64url HMAC-SHA256 with the device's key for this box
+origin>, id, task, source, title, body, costCents, mac}` (`source` is the task's, like `factory:...`). `mac` is base64url HMAC-SHA256 with the device's key for this box
 over the JSON of every other field, keys sorted. The app checks it before it shows a push as this box's or acts on
 Approve or Deny.
 
@@ -931,14 +988,14 @@ always deny. core/demo.ts checks each of these; native/demo.ts checks every call
 The apps read `owner` from `GET /api/me` to decide whether to show owner controls such as the kill switch, and pair
 from the link in a pairing QR: the computer's own page on the home network (`boxUrl` from `POST /api/pair/start`)
 unless remote access is on. A test notification that cannot be sent is a `502` whose error is a sentence ("The
-notification was not sent: the relay at box.gurtos.com isn't answering.").
+notification was not sent: the relay at relay.example.com isn't answering.").
 
 ## Quick Start: set up a new computer from one you own
 
 The phone is the bridge (`core/quickstart.ts`). The new computer shows a QR with its one-time X25519 key, a secret and a
 relay rendezvous id, all after `#`. The owner's phone asks a computer it owns to send. That computer's core seals the
 bundle to the new computer's key mixed with the secret, and the new computer applies it with the same setup functions
-as the wizard. The relay sees only ciphertext.
+as the wizard. The relay sees only ciphertext. Quick Start needs a relay: with none set, `start` and `send` answer `409` with the no-relay sentence and make no request.
 
 | Request | Does |
 |---|---|

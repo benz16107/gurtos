@@ -74,7 +74,7 @@ Out of scope:
   36 are caught and 5 are not covered: data sent out through a host the task was allowed to reach; what tasks share
   through the machine's network space (an abstract Unix socket between two tasks, root services on abstract sockets,
   and `/proc/net`); and a command that skips Droid's second look by calling the broker itself:
-  [`tracks/armadin/SCOREBOARD.md`](tracks/armadin/SCOREBOARD.md). The mapping to the OWASP lists is in
-  [`tracks/armadin/OWASP.md`](tracks/armadin/OWASP.md).
+  [`tracks/attacks/SCOREBOARD.md`](tracks/attacks/SCOREBOARD.md). The mapping to the OWASP lists is in
+  [`tracks/attacks/OWASP.md`](tracks/attacks/OWASP.md).
 - **The known limits** in the [roadmap](ROADMAP.md): one kernel shared by every task, a disk limit that is a check
   every 2 seconds rather than a quota, no disk encryption, release keys kept in files, no outside audit.

@@ -4,7 +4,7 @@ Instructions for coding agents (and people) working in this repo. Contributor gu
 a GurtOS computer for someone through an agent, follow `AGENT-SETUP.md` instead.
 
 GurtOS is a set of operating systems built for AI agents, watched and controlled from a web
-portal and a phone. It started as a Cal Hacks 13.0 project. It is a preview: see `README.md`.
+portal and a phone. It started as a Cal Hacks 13.0 project, and the sponsor apps from that weekend live at the git tag `calhacks-2026`. It is a preview: see `README.md`.
 
 **Naming rule:** anything a person reads (the portal, the box screen, the docs, the README) says **GurtOS**,
 and the editions are **GurtOS Server**, **GurtOS Personal** and **GurtOS Business**. Internal names stay `box`:
@@ -45,15 +45,20 @@ and how its screen and controls are presented.
 ## Decided
 
 - TypeScript on Node 22.18 or newer, run directly (type stripping), no build step. It must run on arm64 and x86_64.
-- Factory's Droid is the worker inside every task, with Claude as the model. A box needs one model key: an
-  Anthropic API key or a Factory API key.
+- The worker inside a task is pluggable. Supported agents: Claude Code, Codex CLI, opencode and Factory's Droid
+  (`core/workers/index.ts`). Model calls go to Anthropic, OpenAI, Factory, a local model through Ollama, or the
+  owner's own Anthropic- or OpenAI-compatible endpoint (`core/upstreams.ts`). A box needs one of those set up. The
+  agent holds a placeholder, never a key: the box's proxy adds the vault's key on the way out.
 - SpacetimeDB, self-hosted on the box (TypeScript module), holds live task status and approvals. The action
   log stays on disk so undo and resume don't depend on it.
 - The box's screen and the portal are one web app (`portal/`). Its design comes from Figma.
 - Every app ("track") is one folder that registers itself. The core never imports a track. A new box turns on only
   the model app; every other app stays off until the owner turns it on, and must work or stay off without its keys.
-- A box works with no relay. Remote access and phone push go through a relay (`relay/`); the hosted one at
-  `box.gurtos.com` is offline, so anything that calls it must fail with a plain sentence, not hang.
+- A box works with no relay. Remote access and phone push go through a relay (`relay/`) that the owner runs and
+  sets (`BOX_RELAY` or Settings). There is no default: the hosted one at `box.gurtos.com` is gone, so with no relay
+  set anything that needs one fails at once with a plain sentence (`NO_RELAY` in `core/remote.ts`), never a call.
+- From this machine, loopback requests act as the box's own screen (the owner) only from root, the Personal owner
+  or a member of the `gurtos` group (`trustedUid` in `core/net.ts`). Every other account needs a paired token.
 
 ## Layout
 
@@ -65,16 +70,17 @@ and how its screen and controls are presented.
 - `portal/` the web app for the portal and the box's own screen.
 - `personal/` the GurtOS Personal desktop layer (notifications, top-bar indicator, Files action, Keep and Undo).
 - `image/` the bootable images and their installer, updates and rollback.
-- `site/` the public docs at gurtos.com. `showcase/` the Cal Hacks showcase at calhacks.gurtos.com.
+- `site/` the public docs at gurtos.com.
 - `native/` the GurtOS apps for iPhone, Apple Watch and Mac (one SwiftUI project, `native/apple`) and the Android APK
   (`native/android`). They use the box API like the portal; `native/demo.ts` checks their calls.
 - `release/` how releases are built, signed and published, the licence report, and the public-readiness audit.
 - `relay/` the relay for remote access and push, which runs on its own machine.
-- `docs/` design notes and the hackathon's records; `docs/README.md` says which are current.
+- `docs/` design notes; `docs/README.md` lists them.
 - `demo` the merge gate (below). `deploy` installs origin/main as the box service on a machine you name.
 
 On a box: `BOX_HOME=/var/lib/box` holds `log.jsonl`, `workspaces/`, `views/` and `tasks/<id>/`. The vault is
-`/etc/box/vault.env` (root, 0600). The API is `127.0.0.1:7700`. Task users are `box-<id>`, uids 30000 to
+`/etc/box/vault.env` (root, 0600). The API is `127.0.0.1:7700`. `install.sh` installs a checkout or the latest main on
+an existing Ubuntu 24.04 machine, and `install.sh --uninstall` removes it. Task users are `box-<id>`, uids 30000 to
 39999.
 
 ## Rules for every change

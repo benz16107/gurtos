@@ -1,6 +1,7 @@
-// Droid's hooks (Factory's PreToolUse and PostToolUse), set up by workers/droid.ts in the task user's ~/.factory.
+// The agent's hooks: PreToolUse and PostToolUse, which Droid and Claude Code share (the same input and answer).
+// workers/droid.ts sets them up in the task user's ~/.factory, workers/index.ts in its ~/.claude/settings.json.
 // Runs inside the task, holds no secrets, and talks only to the task's broker socket.
-//   pre:  before every Execute. A risky command waits for the owner's OK; turned down, Droid is told no.
+//   pre:  before every shell command (Droid's Execute, Claude Code's Bash). A risky command waits for the owner's OK; turned down, Droid is told no.
 //   post: after every tool. Logs what came back, so each call and its result are in the action log.
 import { createHash } from 'node:crypto';
 import { call } from '../client.ts';
@@ -22,7 +23,7 @@ if (mode === 'pre' || mode === 'post') {
       if (RISKY.test(cmd)) {
         const key = `hook.${createHash('sha256').update(cmd).digest('hex').slice(0, 12)}`;
         let r: { pending?: boolean; approved?: boolean };
-        do r = await call(sock, 'POST', '/ask', { key, question: `Droid wants to run a risky command: ${cmd.slice(0, 500)}` });
+        do r = await call(sock, 'POST', '/ask', { key, question: `The agent wants to run a risky command: ${cmd.slice(0, 500)}` });
         while (r.pending);
         if (!r.approved) {
           const out = { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The box owner turned this command down.' } };
@@ -36,7 +37,7 @@ if (mode === 'pre' || mode === 'post') {
       await call(sock, 'POST', '/step', { text, data: { hook: 'PostToolUse', tool, ...(sub ? { droid: sub, result: short(e.tool_response, 4000) } : {}) } });
     }
   } catch (err) {
-    console.error(`box hook: ${(err as Error).message}`); // a broken hook must not stop Droid (non-blocking exit 1)
+    console.error(`box hook: ${(err as Error).message}`); // a broken hook must not stop the agent (non-blocking exit 1)
     process.exit(1);
   }
 }

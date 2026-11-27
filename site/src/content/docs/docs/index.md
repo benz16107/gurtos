@@ -12,7 +12,7 @@ the [Download](/download/) page.
 |---|---|
 | Know what GurtOS is | [What is GurtOS?](/docs/introduction/overview/) |
 | See which edition fits your job | [Editions](/docs/introduction/editions/) and [Use cases by edition](/docs/introduction/use-cases/) |
-| Install it | [Install GurtOS Server](/docs/get-started/install-server/), [Install GurtOS Personal](/docs/get-started/install-personal/) or [Install on Ubuntu](/docs/get-started/install-on-ubuntu/) |
+| Install it | [Install on Ubuntu](/docs/get-started/install-on-ubuntu/) with one command and no disk wipe, or from the ISO: [GurtOS Server](/docs/get-started/install-server/) or [GurtOS Personal](/docs/get-started/install-personal/) |
 | Run a first task | [Your first task](/docs/get-started/first-task/), on a box you have a shell on, such as an Ubuntu install |
 | Get a specific job done | [How-to guides](/docs/guides/approve-from-your-phone/) |
 | Understand how it works | [Architecture](/docs/concepts/architecture/) |

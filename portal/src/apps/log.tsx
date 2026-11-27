@@ -1,5 +1,5 @@
 // The action log in words, and a task's diff. Shared by Tasks, Activity and Time Machine.
-import { box, type LogEvent, type Task } from '../live.ts';
+import { agentTitle, box, type LogEvent, type Task } from '../live.ts';
 import { STATE, clock, dollars, who } from '../util.ts';
 import { STEPS } from '../setup.tsx';
 import './windows.css';
@@ -74,7 +74,7 @@ export function describe(e: LogEvent, events: LogEvent[]): { text: string; data:
     case 'task.created': {
       const s = e.spec;
       return {
-        text: `Started by ${s.source}, ${s.worker === 'droid' ? 'a Claude agent' : 'a scripted agent (test)'}, ${s.hosts.length ? `may reach ${s.hosts.join(', ')}` : 'no internet'}${s.budgetCents ? `, budget ${dollars(s.budgetCents)}` : ''}`,
+        text: `Started by ${s.source}, ${s.worker === 'fake' ? 'a scripted agent (test)' : `run by ${agentTitle(s.worker)}`}, ${s.hosts.length ? `may reach ${s.hosts.join(', ')}` : 'no internet'}${s.budgetCents ? `, budget ${dollars(s.budgetCents)}` : ''}`,
         data: `task.created  user ${e.user}  hosts ${s.hosts.join(' ') || 'none'}`,
       };
     }
@@ -163,11 +163,11 @@ export function fieldsOf(e: LogEvent): { main: [string, string][]; raw: [string,
   return { main, raw };
 }
 
-/** What an Undo confirm says. A track can say what else undo does with `undo` in a step's data (Shopper: "Undo
- * refunds this $13.00 test payment."); the newest one wins. */
+/** What an Undo confirm says. A track can say what else undo does with `undo` in a step's data
+ * ("Undo refunds this $13.00 test payment."); the newest one wins. */
 export function undoCopy(t: Pick<Task, 'id' | 'source'>, files?: number) {
   const step = box.events.findLast((e) => e.task === t.id && e.type === 'task.step' && typeof (e.data as { undo?: unknown })?.undo === 'string');
-  const extra = step?.type === 'task.step' ? (step.data as { undo: string }).undo : t.source.startsWith('shopper') ? 'Its test payment is refunded.' : '';
+  const extra = step?.type === 'task.step' ? (step.data as { undo: string }).undo : '';
   const refund = /refund/i.test(extra);
   const leave = files === 1 ? 'Its 1 file leaves' : files ? `Its ${files} files leave` : 'Its changes leave';
   return {

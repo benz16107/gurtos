@@ -1,4 +1,4 @@
-// The incident drill (GurtOS Business, docs/drill.md): during a live run, pull the kill switch and measure how long it
+// The incident drill (GurtOS Business): during a live run, pull the kill switch and measure how long it
 // takes until every agent has stopped; undo a bad batch; resume; and write the numbers into the action log.
 //   node --experimental-strip-types core/drill.ts <box socket> <title words of the bad batch> [quiet seconds]
 // Run it as root on the box (it reads each task unit's freezer state). It acts as the box's own screen, which is the

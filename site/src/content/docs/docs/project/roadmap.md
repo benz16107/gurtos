@@ -17,8 +17,8 @@ intended. **Not built** means a known gap with no plan yet; it is listed so you 
 | Authentication on the HTTP API | Preview | Built: from anywhere but the box itself, every request needs a paired device's token, and setup, settings, the vault and the owner's folders need the owner. Pair the owner's phone in setup or in Settings, Devices. |
 | A setting for the API's listen address and the phone address | Planned | GurtOS Server and GurtOS Personal from the ISO set them by themselves for private networks. On the Ubuntu install they are the `BOX_LISTEN` and `BOX_URL` environment variables, set by hand. |
 | Remote access and push notifications through a relay you run | Preview | Built: an https address per box and push to phones. See [Run your own relay](/docs/guides/self-host/). |
-| A hosted relay at `box.gurtos.com` | Not running | It is not running during the preview. Until it is, use your home network, a private network such as Tailscale, or your own relay. |
-| The web app's relay address set by configuration | Not built | A self-hosted web app changes one line in `portal/src/relay.ts`. A box's own copy of the web app cannot turn on push through a self-hosted relay. |
+| A hosted relay at `box.gurtos.com` | Not running | It is offline, and nothing defaults to it. Use your home network, a private network such as Tailscale, or your own relay. |
+| The web app's relay address set by configuration | Not built | A self-hosted web app sets one line in `portal/src/relay.ts`, which is empty by default. A box's own copy of the web app cannot turn on push through a self-hosted relay. |
 | Public downloads of the ISO | Preview | v0.2.0-preview images on the [Download](/download/) page. |
 
 ## The OS image
@@ -26,7 +26,7 @@ intended. **Not built** means a known gap with no plan yet; it is listed so you 
 | Item | Status | Why |
 |---|---|---|
 | Updates from the screen | Not built | `box-update` needs a root shell. GurtOS Personal has one through `sudo`. A release build of GurtOS Server does not, so a Server box moves to a new release by reinstalling, which erases its disk. |
-| Tested on real PCs, UTM and Parallels | Planned | Tested so far in QEMU on x86_64 (BIOS and UEFI) and arm64 (emulated), and on a Vultr instance. |
+| Tested on real PCs, UTM and Parallels | Planned | Tested so far in QEMU on x86_64 (BIOS and UEFI) and arm64 (emulated), and on a cloud instance. |
 | Verified, read-only system slots (dm-verity) | Not built | Slots are plain writable ext4 today. |
 | Update key rotation | Not built | One signing key. |
 | Rollback protection | Preview | `box-update` refuses an older build unless you pass `--allow-older`. Nothing stops an older signed image installed with that flag. |
@@ -72,9 +72,6 @@ intended. **Not built** means a known gap with no plan yet; it is listed so you 
 |---|---|
 | A Find window in the portal | Planned |
 | A hosted vision model for Find on boxes without a GPU | Planned |
-| Payments through a custodial wallet, so no private key is on the box | Planned |
-| Signed calls from the Jira panel to the box, instead of one shared secret | Planned |
-| Guests in the ASI:One chat, with the owner approving their requests | Planned |
 
 ## Related
 

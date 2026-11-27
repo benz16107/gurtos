@@ -7,7 +7,7 @@
 //   gurtos app on|off <id>               (also: gurtos apps add <id>)
 //   gurtos budget <ask-over-dollars> <task-budget-dollars>
 //   gurtos settings '<json>'             any other setting, checked by the computer
-//   gurtos remote on [name]              its https address at <name>.box.gurtos.com
+//   gurtos remote on [name]              its https address at <name>.relay.example.com
 //   gurtos pair                          a link and code for the owner's phone
 // The token is kept in ~/.config/gurtos/setup.json (0600) and stops working when setup finishes.
 import fs from 'node:fs';

@@ -1,9 +1,10 @@
 # Claude
 
-Claude is the model behind every GurtOS agent task. Each task runs Factory's Droid with a Claude model, and the model
+Claude is the default model for GurtOS agent tasks. A task runs an agent you choose (Claude Code, Codex, opencode or
+Factory's Droid; see "Choose your agent" in the docs and `core/README.md`), and the model
 key stays in the box's vault. Agents never see it: the box's proxy adds it to their model calls on the way out. This
 folder has the parts that are about Claude: choosing a model per task, what it costs, a second look at risky steps,
-a measured attack test and a one-line installer for a machine you already own.
+a measured attack test and the numbers for the one-line installer on a small machine.
 
 ## What it needs
 
@@ -143,17 +144,12 @@ Every case ran on Sonnet 5.5 and on Haiku 5.5, with the second look on and off. 
 On an existing Ubuntu 24.04 machine (x86_64 or arm64, with systemd):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/benz16107/gurtos/main/tracks/anthropic/install.sh | sudo sh
+curl -fsSL https://gurtos.com/install.sh | sh
 ```
 
-`install.sh` in this folder is that script. It checks Ubuntu 24.04, the architecture, systemd, 900 MB of memory and
-4 GB of disk. It installs git, rsync and curl, clones this repository to `/opt/gurtos`, and runs `core/install.sh`,
-which installs Node, the Droid CLI, SpacetimeDB and the box service. The portal then answers on `127.0.0.1:7700`. Open
-it on that machine, or from another computer with `ssh -L 7700:127.0.0.1:7700 <machine>`. Add the model key in Setup.
-`sudo` drops your environment, so a key in `ANTHROPIC_API_KEY` or `FACTORY_API_KEY` reaches the script only if you put it
-on the command line (`sudo ANTHROPIC_API_KEY=... sh`), which leaves it in your shell history. Adding it in Setup is safer.
-`GURTOS_REPO` and `GURTOS_REF` pick another clone or branch, and `GURTOS_FORCE=1` skips the checks. Running it again updates
-the checkout and reinstalls.
+The script is `install.sh` at the top of the repository (the `install.sh` here only forwards to it, for old links).
+It checks the machine, lists what it will change and asks once, then installs, and running it again updates. The
+[Install on Ubuntu](https://gurtos.com/docs/get-started/install-on-ubuntu/) page has the details and the uninstall.
 
 **Measured minimum.** These runs used QEMU/KVM virtual machines with 1 vCPU on a Ryzen 9 7940HS host, with RAM set to
 1 GB and 512 MB, on Oct 24 2026. A real cloud VM or an old laptop's disk and CPU would be slower. The host was also busy
@@ -191,7 +187,7 @@ has not been run against the live API, because the test machines hold no Anthrop
 | `core/workers/review.eval.ts` | the step-level measurement of the second look |
 | `attacks/cases.ts`, `demo.ts` | the attack cases and the gated live run |
 | `attacks/results/` | every result file quoted above |
-| `install.sh` | the one-line install |
+| `install.sh` | forwards to the top-level `install.sh`, so old links keep working |
 
 Run the live parts with `DEMO_ONLY=anthropic DEMO_LIVE=droid,anthropic ./demo <machine>` (about 6 minutes and 35 cents).
 Without `DEMO_LIVE`, `DEMO_ONLY=anthropic ./demo` only checks that a bad model name is refused.

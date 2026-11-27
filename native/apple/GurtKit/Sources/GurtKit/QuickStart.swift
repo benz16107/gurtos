@@ -31,20 +31,21 @@ public struct QuickStart: Equatable, Sendable {
   }
 
   /** Open the owner pairing code. Throws if anything was changed, or the address isn't a GurtOS computer. */
-  public func open(_ b: Sealed, with key: Curve25519.KeyAgreement.PrivateKey) throws -> PairingLink {
+  public func open(_ b: Sealed, with key: Curve25519.KeyAgreement.PrivateKey, relayHost: String? = GurtConfig.relayHost) throws -> PairingLink {
     guard b.v == 1, let eph = Base64URL.decode(b.eph), let iv = Base64URL.decode(b.iv), let ct = Base64URL.decode(b.ct), ct.count > 16, let salt = Base64URL.decode(s)
     else { throw BoxError(status: 0, message: "That isn't a Quick Start reply.") }
     let shared = try key.sharedSecretFromKeyAgreement(with: Curve25519.KeyAgreement.PublicKey(rawRepresentation: eph))
     let aes = shared.hkdfDerivedSymmetricKey(using: SHA256.self, salt: salt, sharedInfo: Data("gurtos quickstart v1".utf8), outputByteCount: 32)
     let plain = try AES.GCM.open(AES.GCM.SealedBox(nonce: AES.GCM.Nonce(data: iv), ciphertext: ct.dropLast(16), tag: ct.suffix(16)), using: aes)
     let o = (try? JSONSerialization.jsonObject(with: plain)) as? [String: Any]
-    guard let host = (o?["host"] as? String).flatMap(Rendezvous.checkedHost), let code = o?["code"] as? String, PairingLink.isCode(code)
+    guard let host = (o?["host"] as? String).flatMap({ Rendezvous.checkedHost($0, relayHost: relayHost) }), let code = o?["code"] as? String, PairingLink.isCode(code)
     else { throw BoxError(status: 0, message: "The new computer's reply has no GurtOS address in it.") }
     return PairingLink(box: host, code: code)
   }
 
   /** Wait (up to 10 minutes) for the new computer's sealed reply in the relay's rendezvous slot, and open it. */
-  public func waitForOwnerCode(_ key: Curve25519.KeyAgreement.PrivateKey, relay: URL = GurtConfig.relay, session: URLSession = .shared) async throws -> PairingLink {
+  public func waitForOwnerCode(_ key: Curve25519.KeyAgreement.PrivateKey, relay: URL? = GurtConfig.relay, session: URLSession = .shared) async throws -> PairingLink {
+    guard let relay else { throw BoxError(status: 0, message: GurtConfig.noRelay) } // no relay: no request, no wait
     let slot = relay.appending(path: "v1/rv/\(rv)/owner")
     return try await withThrowingTaskGroup(of: Sealed?.self) { g in
       g.addTask { try JSONDecoder().decode(Sealed.self, from: try await Relay.poll(slot, session, advice: Relay.byHand)) }
@@ -54,7 +55,7 @@ public struct QuickStart: Equatable, Sendable {
       }
       defer { g.cancelAll() }
       guard let first = try await g.next(), let sealed = first else { throw BoxError(status: 0, message: "No answer.") }
-      return try open(sealed, with: key)
+      return try open(sealed, with: key, relayHost: relay.host)
     }
   }
 }

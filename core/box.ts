@@ -12,17 +12,19 @@ import type { App, Approval, ApprovalRoute, Box, FullSpec, Ctx, LogEvent, LogRea
 import { DEFAULT_POLICY, amountOf, approversFor, auditRows, checkPerson, checkSeats, checkShadow, goLiveRules, holds, notifyPeople, parsePolicy, pilot, refusal, route, toCsv, whoOf, type Business, type Person } from './business.ts';
 import { DB, Live } from './live.ts';
 import { Log, apply, approvalId, canMove, doneLayers, fold, plainText, type State } from './log.ts';
-import { ANTHROPIC_PLACEHOLDER, PLACEHOLDER_KEY, Tries, closeProxy, firewall, fromScreen, logBlocked, sourceOf, stopLoggingBlocked, uidOf, relayCert, reservePort, startProxy } from './net.ts';
+import { Tries, closeProxy, firewall, fromScreen, logBlocked, sourceOf, stopLoggingBlocked, trustedUid, uidOf, relayCert, reservePort, startProxy } from './net.ts';
 import * as sandbox from './sandbox.ts';
 import { HOME, dirs } from './sandbox.ts';
-import { MODELS, modelProblem, resolveModel } from './models.ts';
+import { UPSTREAMS, upstreamReady } from './upstreams.ts';
+import { AGENTS, WORKERS, agentBin, agentsDir, canUse, plan, splitModel } from './workers/index.ts';
+import type { WorkerDef } from './workers/index.ts';
 import { usageCents } from './pricing.ts';
-import { SETUP_STEPS, applyPatch, folderRefusal, hadHumanUse, hostProblem, loadDisabled, loadSetup, loadSettings, readJson, readState, recordStep, saveDisabled, saveSettings, saveSetup, writeJson, type Settings, type SetupState } from './config.ts';
+import { DEFAULT_SETTINGS, SETUP_STEPS, applyPatch, folderRefusal, hadHumanUse, hostProblem, loadDisabled, loadSetup, loadSettings, readJson, readState, recordStep, saveDisabled, saveSettings, saveSetup, writeJson, type Settings, type SetupState } from './config.ts';
 import * as system from './system.ts';
 import { VAULT_NAME, loadVault, redact, removeVaultKey, secretValues, writeVaultKey } from './vault.ts';
 import { challenge, checkSso, noGroup, personId, provider, random, roleFor, verifyIdToken, whoIs, type Claims, type Sso } from './sso.ts';
 import * as push from './push.ts';
-import { APP, Remote, SECRET_KEY, remotePairUrl } from './remote.ts';
+import { APP, NO_RELAY_PUSH, Remote, SECRET_KEY, remotePairUrl } from './remote.ts';
 import * as quick from './quickstart.ts';
 import * as perms from './permissions.ts';
 
@@ -32,6 +34,8 @@ type Handler = (method: string, url: URL, body: any, headers: http.IncomingHttpH
 const MAX_BODY = 10 * 1024 ** 2;
 /** For routes anyone may call without a token: pairing, the work-account sign-in, a track's open routes. */
 const MAX_OPEN_BODY = 1024 ** 2;
+/** The account an agent's npm install runs as: it cannot read the vault, and owns nothing else the box keeps. */
+const NOBODY = 65534;
 
 /** Read a request's body, at most `limit` bytes: past that it is a 413, and the connection closes after the answer. */
 async function readBody(req: http.IncomingMessage, res: http.ServerResponse, limit = MAX_BODY, count?: (bytes: number) => void) {
@@ -132,12 +136,13 @@ const forbid = (message: string): never => {
 
 /** Try a model key with a free call. Rejected keys are not saved; an unreachable service saves it unchecked. */
 export async function checkModelKey(name: string, value: string): Promise<{ status: 'ok' | 'rejected' | 'unchecked' | 'none'; message?: string }> {
-  if (name !== 'ANTHROPIC_API_KEY') return name === 'FACTORY_API_KEY' ? { status: 'unchecked', message: "Saved. GurtOS can't check a Factory key before its first task." } : { status: 'none' };
+  if (name !== 'ANTHROPIC_API_KEY' && name !== 'OPENAI_API_KEY') return name === 'FACTORY_API_KEY' ? { status: 'unchecked', message: "Saved. GurtOS can't check a Factory key before its first task." } : { status: 'none' };
   if (process.env.BOX_DEMO && value.startsWith('demo-')) return { status: 'unchecked', message: 'Saved. GurtOS couldn\'t check it yet.' };
+  const who = name === 'OPENAI_API_KEY' ? 'OpenAI' : 'Anthropic';
   try {
-    const r = await fetch('https://api.anthropic.com/v1/models?limit=1', { headers: { 'x-api-key': value, 'anthropic-version': '2023-06-01' }, signal: AbortSignal.timeout(6000) });
-    if (r.status === 401 || r.status === 403) return { status: 'rejected', message: "Anthropic didn't accept this key. Check that you copied all of it." };
-    if (r.ok) return { status: 'ok', message: 'Anthropic accepted this key.' };
+    const r = await fetch(`${UPSTREAMS[who.toLowerCase()].origin(DEFAULT_SETTINGS)}/v1/models?limit=1`, { headers: who === 'OpenAI' ? { authorization: `Bearer ${value}` } : { 'x-api-key': value, 'anthropic-version': '2023-06-01' }, signal: AbortSignal.timeout(6000) });
+    if (r.status === 401 || r.status === 403) return { status: 'rejected', message: `${who} didn't accept this key. Check that you copied all of it.` };
+    if (r.ok) return { status: 'ok', message: `${who} accepted this key.` };
     return { status: 'unchecked', message: "Saved. GurtOS couldn't check it yet." };
   } catch {
     return { status: 'unchecked', message: "Saved. GurtOS couldn't check it yet." };
@@ -236,6 +241,8 @@ class Core {
   linksPath = path.join(HOME, 'links.json');
   links: Record<string, string | Record<string, string>> = fs.existsSync(this.linksPath) ? JSON.parse(fs.readFileSync(this.linksPath, 'utf8')) : {};
   uidTask = new Map<number, string>();
+  /** The upstream each started task's model calls may go to (the proxy refuses the others). */
+  taskUpstream = new Map<string, string>();
   relay = relayCert(HOME);
   proxyPort = 0;
   live = new Live({
@@ -271,7 +278,7 @@ class Core {
   /**
    * The disk cap: every two seconds, each running task's disk is measured (its layer, home and /tmp), and a task past its cap (5 GB, or its
    * app's permission, or BOX_TASK_DISK_CAP) is stopped and undone, logged and told to the owner's phone. Not a hard quota:
-   * a writer can pass the cap until the next check. Armadin measured 0 to 3.1 s from the write to the stop (six runs).
+   * a writer can pass the cap until the next check. The attack tests measured 0 to 3.1 s from the write to the stop (six runs).
    * A task that ends between two checks is measured once more as it ends (the worker's exit, in start).
    */
   watchDisk() {
@@ -413,9 +420,9 @@ class Core {
   /** What's still missing before this computer is ready. */
   doctor() {
     const missing: { id: string; text: string }[] = [];
-    if (!this.modelVia()) missing.push({ id: 'key', text: 'No model key yet: set ANTHROPIC_API_KEY or FACTORY_API_KEY.' });
+    if (!this.modelVia()) missing.push({ id: 'key', text: 'No model service yet: add an Anthropic, OpenAI or Factory key, a local model through Ollama, or your own endpoint in Settings, Agents & Models.' });
     const droid = system.droidState(); // still downloading on a new image is fine: tasks wait for it
-    if (droid.state === 'missing') missing.push({ id: 'droid', text: droid.message });
+    if (droid.state === 'missing' && this.defaultAgent() === 'droid') missing.push({ id: 'droid', text: droid.message });
     if (system.edition(this.owner, this.business.on) === 'personal' && !this.owner) missing.push({ id: 'owner', text: 'No owner yet.' });
     if (!this.devices.some((d) => !d.revoked && d.kind !== 'setup' && d.kind !== 'watch')) missing.push({ id: 'phone', text: 'No phone paired yet: run pair and scan the code.' });
     return { ok: !missing.length, missing };
@@ -596,7 +603,7 @@ class Core {
 
   /** `app` is the app (track) whose box made the task, whatever `source` it gave: it answers that task's requests. */
   async createTask(spec: TaskSpec, requestedBy?: string, app?: string): Promise<Task> {
-    const known = ['title', 'prompt', 'workspace', 'worker', 'tools', 'hosts', 'budgetCents', 'source', 'folder', 'folders', 'seat', 'droid', 'model', 'files'];
+    const known = ['title', 'prompt', 'workspace', 'worker', 'agent', 'tools', 'hosts', 'budgetCents', 'source', 'folder', 'folders', 'seat', 'droid', 'model', 'files'];
     const unknown = Object.keys(spec ?? {}).filter((k) => !known.includes(k));
     if (unknown.length) throw new Error(`unknown task field${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')} (known: ${known.join(', ')})`);
     // Files shared to a new task (the Mac app's Share menu) get a workspace of their own, named by the box; the log
@@ -609,7 +616,13 @@ class Core {
     }
     // What a task does not name comes from the owner's settings: the budget and the network it gets.
     const dflt = { hosts: this.settings.networkDefault === 'allowlist' ? this.settings.defaultHosts : [], budgetCents: this.settings.defaultBudgetCents };
-    const s: FullSpec = { workspace: 'home', worker: 'droid', tools: [], source: 'api', ...spec, hosts: spec.hosts ?? dflt.hosts, budgetCents: spec.budgetCents ?? dflt.budgetCents };
+    // `agent` is the name the screens use for `worker`. A task that names neither gets the owner's default agent.
+    if (spec.agent !== undefined) {
+      const { agent, ...rest } = spec;
+      if (rest.worker !== undefined && rest.worker !== agent) throw new Error('agent and worker are two names for one thing: send one of them');
+      spec = { ...rest, worker: agent };
+    }
+    const s: FullSpec = { workspace: 'home', worker: this.defaultAgent(), tools: [], source: 'api', ...spec, hosts: spec.hosts ?? dflt.hosts, budgetCents: spec.budgetCents ?? dflt.budgetCents };
     if (!s.title || !s.prompt) throw new Error('a task needs a title and a prompt');
     if (s.droid !== undefined) {
       const { plan, autonomy, ...rest } = s.droid as Record<string, unknown>;
@@ -631,17 +644,28 @@ class Core {
     s.hosts = s.hosts.map((h) => h.toLowerCase());
     if (!Array.isArray(s.tools) || s.tools.some((x) => typeof x !== 'string')) throw new Error('tools: a list of tool names');
     if (!/^[\w.-]+$/.test(s.workspace) || !fs.existsSync(dirs.workspace(s.workspace))) throw new Error(`no workspace ${s.workspace}`);
-    if (!['droid', 'fake'].includes(s.worker)) throw new Error(`no worker ${s.worker}`);
-    const why = modelProblem(s.model);
-    if (why) throw new Error(why);
-    if (s.worker === 'droid') s.model = resolveModel(s.model); // the task records the exact model it ran on, the default too
-    else delete s.model; // a scripted worker runs no model
+    const def = typeof s.worker === 'string' && Object.hasOwn(WORKERS, s.worker) ? WORKERS[s.worker] : undefined;
+    if (!def) throw new Error(`no worker ${String(s.worker).slice(0, 40)} (known: ${Object.keys(WORKERS).join(', ')})`);
+    if (s.droid !== undefined && def.name !== 'droid' && def.name !== 'fake') throw new Error(`droid: plan and autonomy are Droid's own options; ${def.title} has none`);
+    // A scripted worker runs no model, but a name that could never be one is still refused at the door.
+    if (!def.upstreams.length && spec.model != null && spec.model !== '' && (typeof spec.model !== 'string' || !/^[\w.:@/-]{1,100}$/.test(spec.model))) throw new Error('model: a model id, like sonnet, claude-sonnet-5-5 or ollama/qwen3');
+    delete s.model;
+    if (def.upstreams.length) {
+      // The task records the exact model it ran on, the default too. With no model service set up yet the name is
+      // still checked (against the agent's first one), and the task fails when it starts, with the reason.
+      const usable = (u: string) => this.usable(def, u);
+      const p = plan(def, spec.model, def.upstreams.some(usable) ? usable : () => true);
+      const named = splitModel(spec.model).upstream;
+      // A local model or the owner's endpoint is kept in front of the id, so the task goes back there and is priced as that.
+      const front = named ?? (['ollama', 'custom'].includes(p.upstream) ? p.upstream : undefined);
+      if (p.model !== undefined) s.model = front ? `${front}/${p.model}` : p.model;
+    }
     if (s.seat !== undefined && (typeof s.seat !== 'string' || !s.seat.trim() || s.seat.length > 60)) throw new Error('seat: text, at most 60 characters, like "Credit analyst"');
     // A demo run spends no Factory credit unless it was asked to: a track that wants a real agent must be gated behind DEMO_LIVE=droid.
     if (s.worker === 'droid' && process.env.BOX_NO_DROID) throw new Error('real Droid is off in this demo run (it spends Factory credit); DEMO_LIVE=droid ./demo, or ./demo --live-droid, turns it on');
     for (const name of s.tools) if (!this.tools.has(name)) throw new Error(`no tool ${name}`);
     // Apps may hand the agent what they remember. A Droid task gets it after its prompt; any task logs what it was handed.
-    // Never for a guest's task (a stranger through the public Mana app or ASI:One): its result goes back to the stranger.
+    // Never for a guest's task (a stranger through a public app or chat): its result goes back to the stranger.
     // Each app gets 2 s, and all of them together may add 8,000 characters, so a slow app or a long memory cannot hold up or swamp a task.
     const handed: string[] = [];
     const guest = /^guest(-run)?:/.test(s.source) || s.workspace === 'guest';
@@ -670,13 +694,17 @@ class Core {
   async start(t: Task) {
     if (this.paused) return; // the kill switch is on: it starts when someone resumes the agents
     try {
-      if (t.worker === 'droid') {
-        if (!this.modelVia()) this.vault = loadVault(); // a key added to the file by hand since boot
-        if (!this.modelVia()) throw new Error('No model key yet. Add an Anthropic or Factory API key in Settings, Accounts & Keys, then start the task again.');
-        // An image downloads Droid after its first start (its license forbids shipping it in the image): a task waits for it.
-        const droid = system.droidState();
-        if (droid.state === 'missing') throw new Error(droid.message);
-        if (droid.state !== 'ready') return this.waitForDroid(t, droid.message);
+      const def = WORKERS[t.worker];
+      let via: { upstream: string; model?: string } | undefined; // where its model calls go; none for a scripted task
+      if (def.upstreams.length) {
+        if (!def.upstreams.some((u) => this.usable(def, u))) this.vault = loadVault(); // a key added to the file by hand since boot
+        via = plan(def, t.model, (u) => this.usable(def, u));
+        this.taskUpstream.set(t.id, via.upstream);
+        // An agent's command is fetched after the box starts (Droid by the image, its license forbids shipping it; the
+        // others by the box the first time a task needs them): a task waits for it.
+        const agent = this.agentState(def);
+        if (agent.state === 'missing') throw new Error(agent.message);
+        if (agent.state !== 'ready') return this.waitForAgent(t, agent.message);
       }
       sandbox.kill(t); // a worker left over from a core that died without the box rebooting
       // A linked (real-folder) workspace is not layer-stacked: each task starts from the real folder, and
@@ -700,29 +728,13 @@ class Core {
         AWS_ACCESS_KEY_ID: this.decoy(t.id).id, // the tripwire: a decoy, never a real key
         AWS_SECRET_ACCESS_KEY: this.decoy(t.id).secret,
       };
-      let byok: string | undefined; // the model id, when the task runs on the owner's own Anthropic key
-      if (t.worker === 'droid') {
-        const via = this.modelVia();
-        // The task holds placeholders. The proxy swaps in the real key on the way to Factory or Anthropic.
-        if (via === 'anthropic') byok = resolveModel(t.model);
-        Object.assign(env, {
-          FACTORY_API_KEY: PLACEHOLDER_KEY, // the SDK wants one even when the model is the owner's own key
-          FACTORY_API_BASE_URL: proxy,
-          FACTORY_EXTRA_CA_CERTS: this.relay.caPem,
-          NODE_EXTRA_CA_CERTS: this.relay.caPem,
-          FACTORY_RIPGREP_PATH: '/usr/bin/rg',
-          BOX_MODEL: byok ? `custom:${byok}` : resolveModel(t.model),
-          ...(process.env.BOX_REVIEW ? { BOX_REVIEW: process.env.BOX_REVIEW } : {}),
-        });
-      }
+      // The task holds placeholders. The proxy puts the real key in on the way to the model service.
+      const ctx = via && { ...via, wire: UPSTREAMS[via.upstream].wires(this.settings).find((w) => def.wires.includes(w))!, base: (u: string) => `${proxy}/up/${u}`, home: path.join(dirs.task(t.id), 'home'), socket: dirs.socket(t.id), caPem: this.relay.caPem, proxy };
+      if (ctx) Object.assign(env, def.env(ctx), def.cmd ? { BOX_AGENT_BIN: agentBin(def) } : {}, process.env.BOX_REVIEW ? { BOX_REVIEW: process.env.BOX_REVIEW } : {});
       const ids = await sandbox.prepare(t);
-      if (byok) {
-        // Droid reads its own-key models from the task user's ~/.factory/settings.json; the key there is a placeholder.
-        // The task's model, plus Haiku for the second-pair-of-eyes check (core/workers/review.ts).
-        const customModels = [...new Set([byok, MODELS.haiku])].map((model) => ({ model, displayName: 'Claude (your Anthropic key)', baseUrl: 'https://api.anthropic.com', apiKey: ANTHROPIC_PLACEHOLDER, provider: 'anthropic', maxOutputTokens: 8192 }));
-        // The task's processes were stopped above, and its home is its own: never write through a link it left there.
-        sandbox.writeHomeFile(t, ids, '.factory/settings.json', JSON.stringify({ customModels }));
-      }
+      // The agent's own settings, in the task's home. The task's processes were stopped above, and its home is its
+      // own: never write through a link it left there.
+      if (ctx) for (const [rel, text] of Object.entries(def.files?.(ctx) ?? {})) sandbox.writeHomeFile(t, ids, rel, text);
       sandbox.snapshotBase(t);
       this.uidTask.set(ids.uid, t.id);
       stopLoggingBlocked(t.id); // a task resumed after the core restarted (not the machine) still has its old rule
@@ -760,7 +772,7 @@ class Core {
         try {
           if (t.state === 'running' || t.state === 'waiting') {
             const why = code === 0 ? undefined : sandbox.workerError(t);
-            this.move(t, code === 0 ? 'done' : 'failed', code === 0 ? {} : { error: system.failureText(why, signal ?? code, this.modelVia() ?? undefined, t.worker) });
+            this.move(t, code === 0 ? 'done' : 'failed', code === 0 ? {} : { error: system.failureText(why, signal ?? code, via?.upstream, t.worker) });
             // A task on the owner's real folder waits for their Keep or Undo.
             if (code === 0 && sandbox.isLinked(t.workspace)) this.write({ type: 'keep', task: t.id, result: 'pending' });
           }
@@ -777,24 +789,96 @@ class Core {
     }
   }
 
-  /** Droid tasks waiting for the image to finish downloading Droid, and the timer that starts them once it is here. */
+  /** Whether this agent's tasks can use this upstream now: it is set up, and speaks a format the agent sends. */
+  usable(def: WorkerDef, upstream: string) {
+    return canUse(def, upstream, this.settings, (k) => this.vault.get(k));
+  }
+
+  /** The agent of a task that names none: the owner's choice, or the first that has a model service (Droid when none has). */
+  defaultAgent(): string {
+    if (process.env.BOX_NO_DROID) return 'droid'; // a demo run: a task that names no agent is refused as Droid's, never run on another paid model
+    if (this.settings.defaultAgent !== 'auto') return this.settings.defaultAgent;
+    return AGENTS().find((n) => WORKERS[n].upstreams.some((u) => this.usable(WORKERS[n], u))) ?? 'droid';
+  }
+
+  /**
+   * Whether an agent's command is here. Droid comes with the machine's setup (system.droidState). The others the box
+   * installs itself, from npm at the version in workers/index.ts, the first time a task needs one: asking for the
+   * state of one that is missing starts that.
+   */
+  installing = new Set<string>();
+  installFailed = new Map<string, string>();
+  agentState(def: WorkerDef, install = true): { state: string; message: string } {
+    if (def.name === 'droid') return system.droidState();
+    // Its command appears before its install scripts finish, so a running install is never ready.
+    if (!def.pkg || (!this.installing.has(def.name) && fs.existsSync(agentBin(def)))) return { state: 'ready', message: `${def.title} is ready.` };
+    // A failed install fails the task that waited for it, with the reason. The next task tries again.
+    const failed = this.installFailed.get(def.name);
+    if (failed) {
+      if (install) this.installFailed.delete(def.name);
+      return { state: 'missing', message: failed };
+    }
+    if (!this.installing.has(def.name)) {
+      if (!install) return { state: 'absent', message: `${def.title} is installed the first time a task uses it.` };
+      const dir = path.join(agentsDir(), def.name);
+      fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+      const out = fs.openSync(path.join(dir, 'install.log'), 'a');
+      // Claude Code and opencode need their install scripts, and any dependency's script runs too. So npm runs as
+      // nobody, who cannot read the vault, and the folder goes back to root once it is done. Tasks only run it.
+      // shortcut: pinned by version, not by checksum, and dependencies are not locked; ship a lockfile per agent to fix both.
+      const asRoot = process.getuid?.() === 0;
+      if (asRoot) fs.chownSync(dir, NOBODY, NOBODY);
+      this.installing.add(def.name); // only once its log is open: a throw above fails this task, and the next one tries again
+      const npm = spawn('npm', ['install', '--prefix', dir, '--no-audit', '--no-fund', '--no-update-notifier', '--loglevel=error', def.pkg], {
+        stdio: ['ignore', out, out],
+        cwd: dir,
+        ...(asRoot ? { uid: NOBODY, gid: NOBODY } : {}),
+        env: { ...process.env, HOME: dir, npm_config_cache: path.join(dir, '.npm'), PATH: `${path.dirname(process.execPath)}:${process.env.PATH ?? '/usr/bin:/bin'}` },
+      });
+      let over = false; // a command that could not start reports twice
+      const ended = (ok: boolean) => {
+        if (over) return;
+        over = true;
+        fs.closeSync(out);
+        fs.rmSync(path.join(dir, '.npm'), { recursive: true, force: true });
+        if (asRoot) {
+          try {
+            execFileSync('chown', ['-R', '--no-dereference', '0:0', dir]);
+          } catch (e) {
+            ok = false; // an agent nobody could still change is not used
+            console.error(`agent install: could not give ${dir} back to root: ${(e as Error).message}`);
+          }
+        }
+        this.installing.delete(def.name);
+        if (!ok || !fs.existsSync(agentBin(def))) this.installFailed.set(def.name, `${def.title} could not be installed (npm install ${def.pkg} failed; see ${path.join(dir, 'install.log')}). Check this computer's internet connection, then start the task again.`);
+      };
+      npm.once('error', () => ended(false));
+      npm.once('exit', (code) => ended(code === 0));
+    }
+    return { state: 'downloading', message: `${def.title} is downloading. The task starts once it is here.` };
+  }
+
+  /** Tasks waiting for their agent's command to arrive, and the timer that starts them once it is here. */
   droidWaiting = new Set<string>();
   droidTimer?: NodeJS.Timeout;
-  waitForDroid(t: Task, message: string) {
+  waitForAgent(t: Task, message: string) {
     if (!this.droidWaiting.has(t.id)) {
       this.droidWaiting.add(t.id);
       this.write({ type: 'task.step', task: t.id, text: message }); // what the task list shows while it waits
     }
     this.droidTimer ??= setInterval(() => {
-      if (system.droidState().state !== 'ready') return;
+      // Each task whose agent is here now, or could not be fetched, starts again: start() runs it or fails it with the
+      // reason. 'absent' means another waiting task already took the failure, so this one's start() tries the install again.
+      for (const id of [...this.droidWaiting]) {
+        const w = this.state.tasks.get(id);
+        const live = w && (w.state === 'queued' || w.state === 'running' || w.state === 'waiting');
+        if (live && !['ready', 'missing', 'absent'].includes(this.agentState(WORKERS[w.worker], false).state)) continue;
+        this.droidWaiting.delete(id);
+        if (live) void this.start(w);
+      }
+      if (this.droidWaiting.size) return;
       clearInterval(this.droidTimer);
       this.droidTimer = undefined;
-      const ids = [...this.droidWaiting];
-      this.droidWaiting.clear();
-      for (const id of ids) {
-        const w = this.state.tasks.get(id);
-        if (w && (w.state === 'queued' || w.state === 'running' || w.state === 'waiting')) void this.start(w);
-      }
     }, 5000).unref();
   }
 
@@ -807,6 +891,7 @@ class Core {
     stopLoggingBlocked(t.id);
     this.brokers.get(t.id)?.close();
     this.brokers.delete(t.id);
+    this.taskUpstream.delete(t.id);
     sandbox.seal(t);
     if ((t.state === 'done' || t.state === 'undone') && !sandbox.isLinked(t.workspace)) this.refreshView(t.workspace);
     this.sweepUndone();
@@ -1057,8 +1142,8 @@ class Core {
 
   /**
    * The person behind a request on a Business box: the person a paired phone was paired for, or, on the box's own
-   * screen, the person it says with the `x-box-person` header (the screen is trusted, as it always was). A helper
-   * service on the box (one running as nobody or as a task user) is never a person.
+   * screen, the person it says with the `x-box-person` header (the screen is trusted, as it always was). Any other
+   * account on the box (a helper service, a task user) is not the screen, so it is never a person.
    */
   personOf(req: http.IncomingMessage): Person | undefined {
     if (!this.business.on) return undefined;
@@ -1067,7 +1152,7 @@ class Core {
     const device = this.deviceOf(req);
     if (device) return this.person(device.person);
     const said = req.headers['x-box-person'];
-    return this.isLocal(req) && !this.serviceCaller(req) && typeof said === 'string' ? this.person(said) : undefined;
+    return this.isLocal(req) && typeof said === 'string' ? this.person(said) : undefined;
   }
 
   /** Who is acting, for the log: the person, else the phone, else the box's screen; and the phone or screen it came from. */
@@ -1107,7 +1192,7 @@ class Core {
       const owners = (s?: Sso) => Object.values(s?.groups ?? {}).some((g) => g.role === 'owner');
       if ((owners(b.sso as Sso | undefined) || owners(this.business.sso)) && !this.isOwner(req)) forbid('only the owner can map a group to the owner role');
     }
-    // A seat counts once it is declared, or once a task on this box has worked in it (the credit desk's seats).
+    // A seat counts once it is declared, or once a task on this box has worked in it (Business seats).
     const worked = [...this.state.tasks.values()].flatMap((t) => (t.seat ? [{ name: t.seat }] : []));
     if ('shadow' in b) b.shadow = checkShadow(b.shadow, [...((b.seats as Business['seats']) ?? this.business.seats), ...worked]);
     const { name, who } = this.actor(req);
@@ -1145,7 +1230,7 @@ class Core {
   }
 
   /**
-   * Rules from outside (Mana drafts them in a chat): applied only when a track's own request for exactly this text was
+   * Rules from outside (an app drafts them in a chat): applied only when a track's own request for exactly this text was
    * approved by an owner or an admin, so no rule can let an approver, an agent or the app itself change the rules.
    */
   policyFrom(track: string, text: unknown, approvalId: string) {
@@ -1875,6 +1960,7 @@ class Core {
       writeJson(this.ownerPath, { user, setAt: new Date().toISOString() });
       this.owner = user;
     }
+    this.trustedPeers = new WeakMap(); // an open connection from the old owner's account stops counting as the owner
     this.write({ type: 'note', track: 'owner', data: { owner: this.owner } });
     return this.ownerInfo();
   }
@@ -1883,7 +1969,7 @@ class Core {
   requireOwnerChange(req: http.IncomingMessage) {
     this.requireOwner(req);
     // An owner.json that could not be read still means an owner was set: only root or the owner's phone changes it.
-    if ((this.owner || this.torn.includes('owner.json')) && req.socket.remoteAddress !== undefined && !this.deviceOf(req)?.owner) {
+    if ((this.owner || this.torn.includes('owner.json')) && !this.viaSocket.has(req.socket) && !this.deviceOf(req)?.owner) {
       throw Object.assign(new Error('the owner is already set; change it on this computer or from the owner\'s phone'), { status: 403 });
     }
   }
@@ -1896,6 +1982,7 @@ class Core {
       product: 'GurtOS',
       edition,
       editionName: `GurtOS ${edition[0].toUpperCase()}${edition.slice(1)}`,
+      install: system.isImage() ? 'image' : 'checkout', // an image updates as a whole system; a checkout by running install.sh again
       version: v.version,
       build: v.build,
       hostname: os.hostname(),
@@ -1906,6 +1993,7 @@ class Core {
       owner: this.owner,
       model: { ready: !!this.modelVia(), via: this.modelVia() },
       droid: system.droidState(),
+      agents: this.agentsView(),
       ...(this.business.on ? { company: this.business.company } : {}),
       paused: this.pauseView(),
       startedAt: this.startedAt,
@@ -1913,19 +2001,33 @@ class Core {
     };
   }
 
-  /** Which model key the box will use: Factory's if it has one, else the owner's own Anthropic key. */
-  modelVia(): 'factory' | 'anthropic' | null {
-    return this.vault.get('FACTORY_API_KEY') ? 'factory' : this.vault.get('ANTHROPIC_API_KEY') ? 'anthropic' : null;
+  /** Which model service the box will use: Factory if it has that key, else the owner's own Anthropic key, else the first other one that is set up. */
+  modelVia(): string | null {
+    return ['factory', 'anthropic', 'openai', 'custom', 'ollama'].find((u) => upstreamReady(UPSTREAMS[u], this.settings, (k) => this.vault.get(k))) ?? null;
+  }
+
+  /** The agents a task can run on, for the picker: which can start now, which model services each uses, and the default. */
+  agentsView() {
+    return {
+      default: this.defaultAgent(),
+      setting: this.settings.defaultAgent,
+      list: AGENTS().map((name) => {
+        const def = WORKERS[name];
+        const via = def.upstreams.filter((u) => this.usable(def, u));
+        return { name, title: def.title, upstreams: def.upstreams, via, ready: via.length > 0, installed: this.agentState(def, false).state === 'ready' };
+      }),
+      upstreams: Object.values(UPSTREAMS).map((u) => ({ id: u.id, title: u.title, ready: upstreamReady(u, this.settings, (k) => this.vault.get(k)), ...(u.vaultKey ? { key: u.vaultKey, keySet: this.vault.has(u.vaultKey) } : {}) })),
+    };
   }
 
   /** The setup state with the suggested step order. Until `done`, the box's screen shows the wizard. */
   setupView() {
-    return { model: { ready: !!this.modelVia(), via: this.modelVia() }, droid: system.droidState(), modelKey: !!this.modelVia(), done: this.setup.done, finishedAt: this.setup.finishedAt ?? null, migrated: this.setup.migrated ?? false, steps: this.setup.steps, suggested: SETUP_STEPS, channel: this.channelView() };
+    return { model: { ready: !!this.modelVia(), via: this.modelVia() }, droid: system.droidState(), agents: this.agentsView(), modelKey: !!this.modelVia(), done: this.setup.done, finishedAt: this.setup.finishedAt ?? null, migrated: this.setup.migrated ?? false, steps: this.setup.steps, suggested: SETUP_STEPS, channel: this.channelView() };
   }
 
   // ---------- pairing a phone, and listing every box ----------
 
-  /** This box plus the peer boxes in BOX_PEERS, so one portal lists and drives several (the Vultr second box). */
+  /** This box plus the peer boxes in BOX_PEERS, so one portal lists and drives several (a second box). */
   boxes() {
     let peers: unknown[] = [];
     try {
@@ -1952,10 +2054,10 @@ class Core {
     const remote = this.remote.saved;
     const base = this.boxUrl();
     let url: string;
-    if (remote) url = remotePairUrl(code, remote, !!this.remote.custom);
+    if (remote) url = remotePairUrl(code, remote);
     else {
       const allowed = () => !this.setup.done && !fs.existsSync(this.remote.offFile);
-      const rv = allowed() ? randomBytes(16).toString('base64url') : '';
+      const rv = allowed() && this.remote.relay ? randomBytes(16).toString('base64url') : '';
       const lan = /^https?:\/\//.test(base) ? new URL(base).host : '';
       url = `${APP}/pair#${Object.entries({ code, ...(rv ? { rv } : {}), ...(lan ? { lan } : {}), n: this.boxName() }).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`; // %20, not +, so every parser reads the name
       if (rv) void this.remote.watchPairing(rv, () => (this.pairCodes.get(code)?.expiry ?? 0) > Date.now(), allowed, BOX_ID);
@@ -2161,16 +2263,17 @@ class Core {
   async pushTo(d: Device, fields: Record<string, string | number>, topic: string) {
     const s = this.remote.saved;
     const secret = this.vault.get(SECRET_KEY);
+    const relay = this.remote.needRelay(NO_RELAY_PUSH); // no relay: refuse before anything else, and make no call
     if (!d.push) throw Object.assign(new Error('turn on notifications on this phone first'), { status: 409 });
     if (!s || !secret) throw Object.assign(new Error('notifications go through the relay: turn on "Reach this computer from anywhere" first'), { status: 409 });
     try {
-      const r = await push.send(this.remote.relay, s.name, secret, d.push, { v: 1, machine: BOX_ID, box: this.boxName(), url: s.url, ...fields }, topic);
+      const r = await push.send(relay, s.name, secret, d.push, { v: 1, machine: BOX_ID, box: this.boxName(), url: s.url, ...fields }, topic);
       if (r.gone) delete d.push, this.saveDevices(); // the phone dropped the subscription
       return r;
     } catch (e) {
       console.error(`push to ${d.name} failed: ${(e as Error).message}`);
       // fetch throws a TypeError when the relay does not answer; the gateway's own refusals are plain Errors.
-      const why = e instanceof TypeError ? `the relay at ${new URL(this.remote.relay).host} isn't answering` : (e as Error).message;
+      const why = e instanceof TypeError ? `the relay at ${new URL(relay).host} isn't answering` : (e as Error).message;
       throw Object.assign(new Error(`The notification was not sent: ${why}.`), { status: 502 });
     }
   }
@@ -2183,7 +2286,7 @@ class Core {
     const remote = this.remote;
     return (this.quickTarget ??= new quick.Target({
       get relay() {
-        return remote.relay; // read each time: the owner can change the relay (PUT /api/remote/relay) without a restart
+        return remote.needRelay(); // read each time: the owner can change the relay (PUT /api/remote/relay) without a restart
       },
       app: APP,
       apply: { putKey: (n, v, w) => this.putKey(n, v, w), changeSettings: (p, w) => this.changeSettings(p, w), enableApp: (id) => this.enableApp(id), disableApp: (id) => this.disableApp(id), setupStep: (k, st, d) => this.setupStep(k, st, d) },
@@ -2229,7 +2332,7 @@ class Core {
     if (body?.approve !== true) return { sent: false };
     const keys = p.keys.filter((k) => this.vault.has(k)); // exactly the keys the question named; `keys` on the answer is ignored
     const b = quick.bundle({ from: this.boxName(), keys: Object.fromEntries(keys.map((k) => [k, this.vault.get(k)!])), settings: this.settings as never, apps: apps(), phonePk: p.phonePk });
-    return quick.deliver(this.remote.relay, p, b).then(() => {
+    return quick.deliver(this.remote.needRelay(), p, b).then(() => {
       // Names only, never values; and the new computer's key, so the owner can match it later.
       this.write({ type: 'note', track: 'quickstart', data: { text: `Quick Start: ${d.name} sent ${keys.length ? keys.join(', ') : 'no keys'}, ${b.apps.length} apps and spending rules to "${p.n}" (key ${quick.fingerprint(p.pk)})`, to: p.n, keys, pk: quick.fingerprint(p.pk) } });
       return { sent: true, phrase: quick.phrase(p.pk) };
@@ -2268,7 +2371,7 @@ class Core {
     const qsend = p.match(/^\/quickstart\/send(?:\/([A-Za-z0-9_-]{8,20}))?$/);
     if (p === '/quickstart/start' && m === 'POST')
       act = () => {
-        if (!(this.isLocal(req) && !this.serviceCaller(req))) throw Object.assign(new Error("Quick Start starts on the new computer's own screen"), { status: 403 });
+        if (!this.isLocal(req)) throw Object.assign(new Error("Quick Start starts on the new computer's own screen"), { status: 403 });
         if (this.setup.done) throw Object.assign(new Error('Quick Start is for a new computer, during setup'), { status: 409 });
         return this.quickTargetFor().start(this.boxName());
       };
@@ -2305,46 +2408,44 @@ class Core {
     return { id, revoked: true };
   }
 
+  /** Connections to the root-only socket, marked when they arrive: a closed TCP connection has no address either. */
+  viaSocket = new WeakSet<http.IncomingMessage['socket']>();
+  /** Whether the account behind a loopback connection may act as this computer's screen (net.ts trustedUid), once per connection. */
+  trustedPeers = new WeakMap<http.IncomingMessage['socket'], boolean>();
+
   /**
-   * The request comes from the box's own screen: over the local socket, or from this machine's loopback with
-   * no proxy header. A request relayed by a reverse proxy or a tailnet serve looks local to the box, but it
-   * carries forwarding headers, so it does not count.
+   * The request comes from the box's own screen: over the root-only socket, or from this machine's loopback with
+   * no proxy header, from root, the owner's account or a member of the gurtos group. A request relayed by a reverse
+   * proxy or a tailnet serve looks local to the box, but it carries forwarding headers, so it does not count. Any
+   * other account on this machine (another login, a service, a task user) needs a paired token like a phone.
    */
   isLocal(req: http.IncomingMessage): boolean {
     const w = this.windowAs.get(req);
     if (w) return !w.device; // an app's window opened on the box's own screen, within its own app (windowGate)
+    const sock = req.socket;
+    if (this.viaSocket.has(sock)) return true;
     // A web page in a browser on this machine also arrives from loopback. Only the box's own pages count (net.ts).
-    return fromScreen(req.socket.remoteAddress, req.headers, this.apiPort, (process.env.BOX_ORIGINS ?? '').split(',').map((o) => o.trim()).filter((o) => o && o !== '*'));
+    if (!fromScreen(sock.remoteAddress ?? 'closed', req.headers, this.apiPort, (process.env.BOX_ORIGINS ?? '').split(',').map((o) => o.trim()).filter((o) => o && o !== '*'))) return false;
+    let ok = this.trustedPeers.get(sock);
+    if (ok === undefined) this.trustedPeers.set(sock, (ok = trustedUid(uidOf(sock), this.owner)));
+    return ok;
   }
 
   /**
    * Who is calling, for a track route (the x-box-caller header): 'screen' (the box's own screen), 'owner' (a phone
-   * paired as the owner), 'device:<id>' (another paired phone), 'service' (a helper on the box, like the ASI:One
-   * agent) or 'none' (an open route reached through a proxy with no token).
+   * paired as the owner), 'device:<id>' (another paired phone) or 'none' (an open route reached with no token).
    */
   callerOf(req: http.IncomingMessage): string {
     const device = this.deviceOf(req);
     if (device) return device.owner ? 'owner' : `device:${device.id}`;
-    if (this.isLocal(req)) return this.serviceCaller(req) ? 'service' : 'screen';
-    return 'none';
+    return this.isLocal(req) ? 'screen' : 'none';
   }
 
   /** The box's own screen, or a device that was paired as the owner. */
   isOwner(req: http.IncomingMessage): boolean {
     // The box's own screen is the owner, unless it says it is someone else (Business: x-box-person).
     const p = this.personOf(req);
-    return (this.isLocal(req) && !this.serviceCaller(req) && !p) || !!this.deviceOf(req)?.owner || p?.role === 'owner';
-  }
-
-  /**
-   * A loopback caller that runs as `nobody` or as a task user: a helper service on the box (the ASI:One agent
-   * runs as nobody), not the box's own screen. It may still use the API like the screen does, but never the
-   * owner's controls (vault, settings, folders, Keep), so a flaw in a helper cannot become the owner's rights.
-   */
-  serviceCaller(req: http.IncomingMessage): boolean {
-    if (req.socket.remoteAddress === undefined) return false; // the root-only socket
-    const uid = uidOf(req.socket);
-    return uid === 65534 || (uid !== undefined && uid >= 30000 && uid <= 39999);
+    return (this.isLocal(req) && !p) || !!this.deviceOf(req)?.owner || p?.role === 'owner';
   }
 
   /** Setup, settings, apps on and off, and the vault are for the owner only. */
@@ -2590,7 +2691,7 @@ class Core {
           case 'POST /setup/:id': {
             // The code is only for someone at this computer's own screen.
             if (id === 'code') {
-              if (!(this.isLocal(req) && !this.serviceCaller(req))) throw Object.assign(new Error("A setup code is shown on this computer's own screen."), { status: 403 });
+              if (!this.isLocal(req)) throw Object.assign(new Error("A setup code is shown on this computer's own screen."), { status: 403 });
               return this.openSetupChannel();
             }
             this.requireOwner(req);
@@ -2668,7 +2769,7 @@ class Core {
     return true;
   }
 
-  /** Follow the action log live over Server-Sent Events, so a reader (Elastic, Jira) need not poll files.
+  /** Follow the action log live over Server-Sent Events, so a reader need not poll files.
    *  GET /api/log/stream?after=<seq>&task=<id>. Each event is `id: <seq>` + `data: <json>`. Resume with
    *  ?after=<seq> or the Last-Event-ID header; replays from there, then streams new events. */
   logStream(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -2867,8 +2968,9 @@ data: ${JSON.stringify(e)}
         this.tripwire(t, 'a web request');
         return true;
       },
-      factoryKey: () => this.vault.get('FACTORY_API_KEY'),
-      anthropicKey: () => this.vault.get('ANTHROPIC_API_KEY'),
+      key: (name) => this.vault.get(name),
+      config: () => this.settings,
+      upstream: (t) => this.taskUpstream.get(t.id),
     }, this.relay);
     try {
       firewall(this.proxyPort); // once the proxy listens: its port is the one tasks may reach
@@ -2894,7 +2996,9 @@ data: ${JSON.stringify(e)}
     this.sweepUndone();
     this.watchDisk();
     for (const pump of this.readers) pump();
-    await listenSocket(this.api(), path.join(HOME, 'api.sock'));
+    const own = this.api();
+    own.on('connection', (s) => this.viaSocket.add(s));
+    await listenSocket(own, path.join(HOME, 'api.sock'));
     // BOX_PORT=auto (the demo) takes any free port and writes it to BOX_HOME/api.port.
     const want = process.env.BOX_PORT ?? '7700';
     if (want !== '0') {

@@ -63,12 +63,7 @@ From inside the box, an app uses a log reader. The core feeds it every event in 
 
 ## Sending it elsewhere
 
-Two optional apps follow the log out of the box. Each needs an account with that service:
-
-- **Jira** turns every task into an issue with its steps, approvals, blocked attempts and diff. See [connect Jira](/docs/guides/connect-jira/).
-- **Elastic** ships every event to an Elasticsearch index and puts an agent on top that answers questions about it. See [send the log to Elastic](/docs/guides/send-the-log-to-elastic/).
-
-Both read with a log reader, so they catch up after a restart from where they stopped.
+An app can follow the log out of the box, for example to an issue tracker or a log service. It reads with a log reader, so it catches up after a restart from where it stopped. Add your own with the [app SDK](/docs/reference/app-sdk/).
 
 ## What not to put in it
 

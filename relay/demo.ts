@@ -1,7 +1,7 @@
 // Remote access and push, in ./demo. Offline by default: a relay in this process (names, the frps plugin, the push
 // gateway) with a stand-in push service, the box's push encryption read back by a stand-in phone, and the box's own
 // API for remote access and notifications. DEMO_LIVE=remote adds the real thing: this demo box enrolls a name with
-// the real relay (BOX_RELAY, default box.gurtos.com), gets its own certificate, answers at https://<name>.<relay>, sends a real push through
+// the real relay (BOX_RELAY, which you must set: there is no default), gets its own certificate, answers at https://<name>.<relay>, sends a real push through
 // the gateway and Mozilla's push service to a stand-in phone, then releases the name.
 import { execFileSync } from 'node:child_process';
 import { createECDH, createHmac, randomBytes } from 'node:crypto';
@@ -12,8 +12,7 @@ import path from 'node:path';
 import type { DemoKit } from '../core/contract.ts';
 import { send } from '../core/push.ts';
 import { keyPair, open as openSealed, phrase } from '../core/quickstart.ts';
-import { APP, RELAY, nameProblem as boxRule } from '../core/remote.ts';
-import { DOMAIN, RESERVED, load, nameProblem as relayRule, serve } from './server.ts';
+import { APP, NO_RELAY, NO_RELAY_PUSH, RELAY, nameProblem as boxRule } from '../core/remote.ts';
 import { decrypt, testPhone } from './testphone.ts';
 
 const LIVE = /\bremote\b/.test(process.env.DEMO_LIVE ?? '');
@@ -24,6 +23,9 @@ const macOk = (msg: string, key: string) => {
 };
 
 export default async function (d: DemoKit) {
+  // The stand-in relay below needs a domain, and the real server has no default: give it an example one.
+  process.env.RELAY_DOMAIN ??= 'relay.example.com';
+  const { DOMAIN, RESERVED, load, nameProblem: relayRule, serve } = await import('./server.ts');
   // ---------- names ----------
   const tries = ['rosa', 'ab', 'ben-laptop', 'Rosa', 'x'.repeat(31), '-a-b', 'a--b', 'xn--abc', 'www', 'relay', 'app', 'shop-42'];
   d.check(tries.every((n) => !!relayRule(n) === (!!boxRule(n) || RESERVED.has(n))), 'the box and the relay agree on names: lowercase, 3 to 30 characters, reserved names blocked');
@@ -100,7 +102,7 @@ export default async function (d: DemoKit) {
   const bad = await raw('PUT', '/api/push', { subscription, key: 'short' }, phoneH);
   d.check(put.body.subscribed === true && (await raw('GET', '/api/push', undefined, phoneH)).body.subscribed === true && bad.status === 400 && /key/.test(bad.body.error), 'a paired phone turns notifications on; a bad subscription is refused by field');
   const test = await raw('POST', '/api/push/test', {}, phoneH);
-  d.check(test.status === 409 && /Reach this computer from anywhere/.test(test.body.error), 'with remote access off, a test push says to turn it on first (pushes go through the relay)');
+  d.check(test.status === 409 && (RELAY ? /Reach this computer from anywhere/.test(test.body.error) : test.body.error === NO_RELAY_PUSH), RELAY ? 'with remote access off, a test push says to turn it on first (pushes go through the relay)' : 'with no relay, a test push refuses at once and says it needs a relay');
   const notOwner = await raw('POST', '/api/remote', { name: 'judge-box' }, phoneH);
   const noToken = await raw('GET', '/api/push', undefined, { 'x-forwarded-for': '203.0.113.7' });
   d.check(notOwner.status === 403 && noToken.status === 401, "only the owner turns remote access on, and nothing answers without a paired phone's token");
@@ -130,7 +132,7 @@ export default async function (d: DemoKit) {
     await d.api('POST', '/setup/finish', {});
   }
   d.check(qrText === undefined || qrText === start.url, qrText === undefined ? '(qrencode and zbarimg are not on this machine: the QR image itself was not decoded)' : 'the setup QR, drawn and read back, holds exactly the link the box gave');
-  d.check(link.origin === APP && link.pathname === '/pair' && !link.search && frag(link).get('code') === start.code && (frag(link).get('rv') ?? '').length >= 22, 'during setup, with remote access off, the QR opens the GurtOS app with the code and a rendezvous id in the fragment, not an address only the box\'s own network can reach');
+  d.check(link.origin === APP && link.pathname === '/pair' && !link.search && frag(link).get('code') === start.code && (RELAY ? (frag(link).get('rv') ?? '').length >= 22 : !frag(link).get('rv')), RELAY ? 'during setup, with remote access off, the QR opens the GurtOS app with the code and a rendezvous id in the fragment, not an address only the box\'s own network can reach' : 'during setup with no relay, the QR carries the code and no rendezvous id, since there is no relay to meet through');
   const viaQr = await raw('POST', '/api/pair', { code: frag(link).get('code'), name: 'Phone from the QR' });
   const qrPhone = { authorization: `Bearer ${viaQr.body.token}`, 'x-forwarded-for': '203.0.113.8' };
   d.check(viaQr.status === 200 && (await raw('GET', '/api/tasks', undefined, qrPhone)).status === 200, 'the code read from the QR pairs a phone with the box');
@@ -144,21 +146,27 @@ export default async function (d: DemoKit) {
   d.check((await raw('POST', '/api/quickstart/start', {})).status === 409, 'Quick Start only starts on a computer that is still in setup');
   await d.api('POST', '/setup/reopen', {});
   try {
-    const st = await d.api('POST', '/quickstart/start', {});
-    const qu = new URL(st.url);
-    d.check(qu.origin === APP && qu.pathname === '/quickstart' && !qu.search && qs(qu).get('pk')?.length === 43 && (qs(qu).get('s') ?? '').length >= 22 && st.phrase === phrase(qs(qu).get('pk')!), "Quick Start's QR carries the new computer's one-time key, the secret and the rendezvous id after #, and its check phrase");
+    // Quick Start meets the other computer through a relay: with none, it refuses at once and sends nothing.
+    const st = RELAY ? await d.api('POST', '/quickstart/start', {}) : undefined;
+    if (!st) {
+      const none = await raw('POST', '/api/quickstart/start', {});
+      d.check(none.status === 409 && none.body.error === NO_RELAY, 'with no relay, Quick Start refuses at once with the sentence about running your own relay');
+    }
+    const qu = new URL(st?.url ?? `${APP}/quickstart#rv=${randomBytes(16).toString('base64url')}&pk=${keyPair().pk}&s=${randomBytes(16).toString('base64url')}`);
+    if (st) d.check(qu.origin === APP && qu.pathname === '/quickstart' && !qu.search && qs(qu).get('pk')?.length === 43 && (qs(qu).get('s') ?? '').length >= 22 && st.phrase === phrase(qs(qu).get('pk')!), "Quick Start's QR carries the new computer's one-time key, the secret and the rendezvous id after #, and its check phrase");
     const send = { rv: qs(qu).get('rv'), pk: qs(qu).get('pk'), s: qs(qu).get('s'), n: 'Demo box', phonePk: keyPair().pk };
     const plainCode = (await d.api('POST', '/pair/start', {})).code;
     const plainPhone = { authorization: `Bearer ${(await raw('POST', '/api/pair', { code: plainCode, name: 'Family phone' })).body.token}`, 'x-forwarded-for': '203.0.113.10' };
     d.check((await raw('POST', '/api/quickstart/send', send, plainPhone)).status === 403 && (await raw('POST', '/api/quickstart/send', { ...send, pk: 'x' }, ownerPhone)).status === 400, 'only a phone paired as the owner can send a setup, and a bad request is refused by field');
     await raw('DELETE', '/api/pair/self', undefined, plainPhone);
-    d.check((await d.api('POST', '/quickstart/stop', {})).state === 'stopped', 'Stop on the new computer ends the session');
+    if (st) d.check((await d.api('POST', '/quickstart/stop', {})).state === 'stopped', 'Stop on the new computer ends the session');
     const page = await fetch(`${d.url}/quickstart`, { headers: { accept: 'text/html' } });
     d.check((page.headers.get('content-type') ?? '').startsWith('text/html'), "a browser opening /quickstart on the computer's own address gets the app's page, not the API");
   } finally {
     await d.api('POST', '/setup/finish', {});
   }
 
+  if (LIVE && !RELAY) return console.log('    (DEMO_LIVE=remote needs BOX_RELAY set to a relay you run: there is no default relay)');
   if (!LIVE) return console.log('    (DEMO_LIVE=remote runs the real relay: a phone that scanned the QR turns remote access on, then a real certificate and a real push)');
 
   // ---------- live: the real relay ----------
@@ -177,7 +185,7 @@ export default async function (d: DemoKit) {
     }, 180_000);
     name = host.split('.')[0];
     const base = `https://${host}`;
-    d.check(host.endsWith(`.${new URL(RELAY).host}`) && /^[a-z0-9-]+$/.test(host.split('.')[0]) && (await raw('GET', '/api/remote')).body.state === 'connected', `live: the phone asked through the relay, and the box turned on ${host} by itself`);
+    d.check(host.endsWith(`.${new URL(RELAY!).host}`) && /^[a-z0-9-]+$/.test(host.split('.')[0]) && (await raw('GET', '/api/remote')).body.state === 'connected', `live: the phone asked through the relay, and the box turned on ${host} by itself`);
     const health = await fetch(`${base}/api/health`);
     d.check(health.ok && (await fetch(`${base}/api/tasks`)).status === 401, `live: ${base} answers with a trusted certificate, and refuses a request without a token`);
     const owner = (await (await fetch(`${base}/api/pair`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: scan.code, name: 'Owner phone' }) })).json()) as any;

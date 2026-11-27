@@ -7,7 +7,9 @@ import http from 'node:http';
 import path from 'node:path';
 import { call } from './client.ts';
 import type { Approval, DemoKit, LogEvent, Task } from './contract.ts';
+import { scriptedModel } from './demo-model.ts';
 import { PLACEHOLDER_KEY } from './net.ts';
+import { BOX_PLACEHOLDER } from './upstreams.ts';
 import { mountsUnder, reap, teardown } from './reap.ts';
 
 const run = randomBytes(3).toString('hex');
@@ -99,7 +101,7 @@ async function startBox() {
   box = spawn(process.execPath, [...process.execArgv, new URL('./box.ts', import.meta.url).pathname], {
     detached: true,
     stdio: ['ignore', out, out],
-    env: { ...process.env, BOX_HOME: HOME, BOX_PORT: 'auto', BOX_VAULT: path.join(HOME, 'vault.env'), BOX_STDB_DB: DB, BOX_PROXY_PORT: 'auto', BOX_SETUP_PORT: 'auto', BOX_APPROVAL_WAIT_MS: String(WINDOW), BOX_OWNER: 'owner', BOX_NO_DROID: LIVE_DROID ? '' : '1', BOX_HOSTS: JSON.stringify({ 'shop.demo': '127.0.0.1', 'meta.demo': '169.254.169.254' }), BOX_DEMO: '1', BOX_ID: 'demo-box', BOX_NAME: 'Demo box', BOX_PEERS: JSON.stringify([{ id: 'vultr', name: 'Vultr box', stdb: 'box' }]) },
+    env: { ...process.env, BOX_HOME: HOME, BOX_PORT: 'auto', BOX_VAULT: path.join(HOME, 'vault.env'), BOX_STDB_DB: DB, BOX_PROXY_PORT: 'auto', BOX_SETUP_PORT: 'auto', BOX_APPROVAL_WAIT_MS: String(WINDOW), BOX_OWNER: 'owner', BOX_NO_DROID: LIVE_DROID ? '' : '1', BOX_AGENTS: '/var/cache/box-agents', BOX_HOSTS: JSON.stringify({ 'shop.demo': '127.0.0.1', 'meta.demo': '169.254.169.254' }), BOX_DEMO: '1', BOX_ID: 'demo-box', BOX_NAME: 'Demo box', BOX_PEERS: JSON.stringify([{ id: 'second', name: 'Second box', stdb: 'box' }]) },
   });
   for (let i = 0; i < 300; i++) {
     if (await api('GET', '/health').catch(() => undefined)) {
@@ -119,7 +121,7 @@ async function waitFor<T>(what: string, fn: () => Promise<T | undefined>, ms = 2
   throw new Error(`timed out waiting for ${what}`);
 }
 
-/** Follow the action log over SSE the way Elastic or Jira would, collecting events until stopAt or a timeout. */
+/** Follow the action log over SSE the way an outside reader would, collecting events until stopAt or a timeout. */
 function streamLog(after: number, opts: { task?: string; stopAt?: (e: LogEvent) => boolean; ms?: number } = {}): Promise<LogEvent[]> {
   return new Promise((resolve, reject) => {
     const qs = new URLSearchParams({ after: String(after) });
@@ -322,9 +324,136 @@ await moment(
   !LIVE_DROID ? 'real Droid spends Factory credit: DEMO_LIVE=droid ./demo (or --live-droid) runs it' : 'no FACTORY_API_KEY in /etc/box/vault.env on this machine',
 );
 
+// ---------- bring your own agent ----------
+
+/** Every process of a task's user, sampled from outside as root: their environments, to look for a real key in. */
+function sampleEnv(user: string) {
+  const envs: string[] = [];
+  const timer = setInterval(() => {
+    for (const pid of spawnSync('pgrep', ['-u', user]).stdout.toString().split('\n').filter(Boolean)) {
+      try {
+        envs.push(fs.readFileSync(`/proc/${pid}/environ`, 'utf8'));
+      } catch {} // the process ended
+    }
+  }, 100);
+  return { envs, stop: () => clearInterval(timer) };
+}
+
+// The real Claude Code command, as its own Linux user, against a scripted model service on this machine: no paid call.
+// The box installs Claude Code from npm the first time (kept in /var/cache/box-agents between runs).
+await moment('agents: Claude Code runs a task through the proxy, with a placeholder key', async () => {
+  const CUSTOM_KEY = 'demo-custom-key-only-the-vault-holds';
+  // What the scripted model has Claude Code do: a shell command, a box tool, and (as a hijacked agent would) a model
+  // call of its own that asks the service to search the web from its side.
+  const search = JSON.stringify({ model: 'm', max_tokens: 5, messages: [{ role: 'user', content: 'x' }], tools: [{ type: 'web_search_20250305', name: 'web_search' }] });
+  const model = await scriptedModel([
+    [{ type: 'tool_use', id: 'toolu_demo_1', name: 'Bash', input: { command: "echo 'made by Claude Code' > agent.txt; id -un > who.txt", description: 'write the files' } }],
+    [{ type: 'tool_use', id: 'toolu_demo_2', name: 'mcp__box__example__spend', input: { cents: 50, on: 'coffee' } }],
+    [{ type: 'tool_use', id: 'toolu_demo_3', name: 'Bash', input: { command: `curl -s -o /dev/null -w '%{http_code}' -X POST "$ANTHROPIC_BASE_URL/v1/messages" -H "x-api-key: $ANTHROPIC_API_KEY" -H 'content-type: application/json' -d '${search}' > search.txt`, description: 'ask for a web search' } }],
+    [{ type: 'text', text: 'I wrote agent.txt and bought the coffee.' }],
+  ]);
+  try {
+    await api('PUT', '/api/vault/CUSTOM_API_KEY', { value: CUSTOM_KEY });
+    await api('PATCH', '/api/settings', { customBaseUrl: model.url, customWire: 'anthropic' });
+    const agents = (await api<{ agents: { list: { name: string; ready: boolean; via: string[] }[] } }>('GET', '/api/setup')).agents;
+    check(agents.list.find((a) => a.name === 'claude')?.via.includes('custom') && !agents.list.find((a) => a.name === 'codex')?.via.includes('custom'), "setup lists the agents: Claude Code can use the owner's Anthropic-format endpoint, Codex cannot");
+    const bad = await viaTcp('POST', '/api/tasks', { title: 't', prompt: 'p', agent: 'claude', model: 'openai/gpt-5' });
+    const unknown = await viaTcp('POST', '/api/tasks', { title: 't', prompt: 'p', agent: 'gemini' });
+    check(bad.status === 400 && /Claude Code cannot use OpenAI/.test(bad.body.error) && unknown.status === 400 && /no worker gemini/.test(unknown.body.error), `a model service the agent cannot use, and an agent the box does not know, are refused when the task is made ("${bad.body.error}")`);
+    // The folder it works on carries a settings file of its own, as a cloned repo might: another model address and a hook.
+    workspace('byo', { 'notes.md': '# Notes\n', '.claude/settings.json': JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'http://shop.demo:9' }, hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'touch hooked.txt' }] }] } }) });
+    const T = await api<Task>('POST', '/tasks', { title: 'Claude Code adds a file', workspace: 'byo', agent: 'claude', model: 'custom/demo-model', source: 'demo', tools: ['example.spend'], budgetCents: 100, hosts: ['docs.example.com'], prompt: 'Write agent.txt, then buy one coffee.' });
+    check(T.worker === 'claude' && T.model === 'custom/demo-model', 'the task records its agent and its model');
+    const sample = sampleEnv(T.user);
+    await settled([T.id], 420000).finally(sample.stop); // the first run on a machine downloads Claude Code
+    const { task: t, events } = await api<{ task: Task; events: LogEvent[] }>('GET', `/tasks/${T.id}`);
+    check(view('byo', 'agent.txt') === 'made by Claude Code' && view('byo', 'who.txt') === T.user, `the real Claude Code command ran as ${T.user} and wrote its file in its own copy`);
+    check(view('byo', 'hooked.txt') === undefined && !events.some((e) => e.type === 'net.blocked' && /shop\.demo/.test(e.host)), "the folder's own .claude/settings.json was not read: its model address and its hook were never used");
+    const stepText = events.flatMap((e) => (e.type === 'task.step' ? [e.text] : []));
+    check(stepText.some((s) => s.startsWith('Claude Code started')) && stepText.some((s) => s.startsWith('Bash ')) && stepText.some((s) => s.startsWith('Bash done')), `its steps and each tool result are in the action log (${stepText.length} steps)`);
+    check(events.some((e) => e.type === 'tool.result' && e.ok) && t.costCents >= 50, 'it used a box tool through the broker (the box MCP server): the spend ran in the core and is on the task');
+    const calls = model.seen.filter((c) => c.path.startsWith('/v1/messages'));
+    check(calls.length >= 4 && calls.every((c) => c.headers['x-api-key'] === CUSTOM_KEY), `the model service got ${calls.length} calls, each with the vault's key`);
+    const everything = [...sample.envs, fs.readFileSync(path.join(HOME, 'tasks', T.id, 'worker.log'), 'utf8'), JSON.stringify(events), fs.readFileSync(path.join(HOME, 'tasks', T.id, 'home', '.claude', 'settings.json'), 'utf8')].join('\n');
+    const keys = new Set(sample.envs.flatMap((e) => e.split('\0').filter((v) => v.startsWith('ANTHROPIC_API_KEY='))));
+    check(keys.size === 1 && keys.has(`ANTHROPIC_API_KEY=${BOX_PLACEHOLDER}`) && !everything.includes(CUSTOM_KEY) && !JSON.stringify(model.seen.map((c) => c.headers)).includes(BOX_PLACEHOLDER), `all ${sample.envs.length} process samples held only the placeholder; the real key never entered the task and the placeholder never left the box`);
+    const refused = events.flatMap((e) => (e.type === 'net.blocked' ? [e.host] : []));
+    check(view('byo', 'search.txt') === '403' && refused.some((h) => /web_search_20250305/.test(h)) && !model.seen.some((c) => JSON.stringify(c.body?.tools ?? '').includes('web_search_20250305')), `a model call asking the service to search the web from its side was refused and logged (${refused.join(', ')})`);
+    check(events.some((e) => e.type === 'cost' && e.model === 'custom/demo-model' && (e.tokens?.output ?? 0) > 0), 'its token counts are in the log with the model');
+    await api('POST', `/tasks/${T.id}/undo`);
+    check(view('byo', 'agent.txt') === undefined && view('byo', 'notes.md') === '# Notes', 'undo removed its changes');
+  } finally {
+    model.close();
+    await api('PATCH', '/api/settings', { customBaseUrl: '' });
+  }
+});
+
+// Live: the same agents on a real model. Off by default because it spends model credit: DEMO_LIVE=claude (or codex, opencode).
+// It uses the test machine's own /etc/box/vault.env: ANTHROPIC_API_KEY or OPENAI_API_KEY, or CUSTOM_BASE_URL with
+// CUSTOM_API_KEY for an endpoint of your own (CUSTOM_WIRE=openai or both if it speaks OpenAI's format), and DEMO_LIVE_MODEL.
+const liveVault = Object.fromEntries(machineVault.split('\n').flatMap((l) => (/^\w+=/.test(l) ? [[l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1).trim()]] : [])));
+for (const [agent, title, wire, own] of [['claude', 'Claude Code', 'anthropic', 'ANTHROPIC_API_KEY'], ['codex', 'Codex', 'openai', 'OPENAI_API_KEY'], ['opencode', 'opencode', 'anthropic', 'ANTHROPIC_API_KEY']] as const) {
+  const on = new RegExp(`\\b${agent}\\b`).test(process.env.DEMO_LIVE ?? '');
+  const custom = liveVault.CUSTOM_BASE_URL && [wire, 'both'].includes(liveVault.CUSTOM_WIRE ?? 'anthropic');
+  await moment(
+    `agents: live ${title} on a real model`,
+    !on || !(custom || liveVault[own])
+      ? undefined
+      : async () => {
+          if (custom) await api('PATCH', '/api/settings', { customBaseUrl: liveVault.CUSTOM_BASE_URL, customWire: wire });
+          if (custom && liveVault.CUSTOM_API_KEY) await api('PUT', '/api/vault/CUSTOM_API_KEY', { value: liveVault.CUSTOM_API_KEY }); // the step above put its own test key there
+          const name = liveVault.DEMO_LIVE_MODEL ?? (agent === 'codex' ? undefined : 'haiku');
+          workspace(`live-${agent}`, { 'notes.md': '# Notes\n' });
+          const T = await api<Task>('POST', '/tasks', { title: `${title} adds a note`, workspace: `live-${agent}`, agent, ...(custom ? { model: `custom/${name ?? 'gpt-5'}` } : name ? { model: name } : {}), source: 'demo', tools: ['example.spend'], budgetCents: 100, prompt: `Append the line "${title} was here." to notes.md. Then buy one coffee for 50 cents with the example spend tool from the box MCP server (on: coffee). Do nothing else.` });
+          const sample = sampleEnv(T.user);
+          await settled([T.id], 420000).finally(sample.stop);
+          const { task: t, events } = await api<{ task: Task; events: LogEvent[] }>('GET', `/tasks/${T.id}`);
+          check(view(`live-${agent}`, 'notes.md')?.includes(`${title} was here.`), `${title}, on ${t.model ?? 'its default model'}, edited the file in its own copy as its own Linux user`);
+          check(events.filter((e) => e.type === 'task.step').length >= 2, `its steps are in the action log (${events.filter((e) => e.type === 'task.step').length})`);
+          check(events.some((e) => e.type === 'tool.result' && e.ok), 'it used a box tool through the broker');
+          const seen = [...sample.envs, fs.readFileSync(path.join(HOME, 'tasks', T.id, 'worker.log'), 'utf8'), JSON.stringify(events)].join('\n');
+          const plain = [liveVault.CUSTOM_BASE_URL, liveVault.DEMO_LIVE_MODEL, liveVault.CUSTOM_WIRE]; // settings for this step, not secrets
+          check(sample.envs.length > 0 && !secrets.some((v) => !plain.includes(v) && seen.includes(v)), `no vault value was in any of ${sample.envs.length} process samples, the worker's output or the log`);
+          const cost = events.find((e) => e.type === 'cost' && e.model);
+          check(cost?.type === 'cost' && (cost.tokens?.output ?? 0) > 0, `its token counts are logged ($${(t.costCents / 100).toFixed(4)} with the 50 cent test spend)`);
+          await api('POST', `/tasks/${T.id}/undo`);
+          check(view(`live-${agent}`, 'notes.md') === '# Notes', 'undo removed its changes');
+          if (custom) await api('PATCH', '/api/settings', { customBaseUrl: '' });
+        },
+    !on ? `it spends model credit: DEMO_LIVE=${agent} ./demo runs it` : `no ${own} (or CUSTOM_BASE_URL) in /etc/box/vault.env on this machine`,
+  );
+}
+
+// Live, a local model: Claude Code on Ollama, with no key anywhere. Off by default because a model on a CPU is slow:
+// DEMO_LIVE=ollama, with Ollama on the test machine and a model pulled (DEMO_OLLAMA_MODEL in its vault.env, else qwen3:0.6b).
+const OLLAMA = 'http://127.0.0.1:11434';
+const ollamaUp = /\bollama\b/.test(process.env.DEMO_LIVE ?? '') && (await fetch(`${OLLAMA}/api/version`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok, () => false));
+await moment(
+  'agents: live Claude Code on a local model through Ollama',
+  !ollamaUp
+    ? undefined
+    : async () => {
+        await api('PATCH', '/api/settings', { ollamaHost: OLLAMA });
+        const name = `ollama/${liveVault.DEMO_OLLAMA_MODEL ?? 'qwen3:0.6b'}`;
+        workspace('live-ollama', {});
+        const T = await api<Task>('POST', '/tasks', { title: 'A local model says ok', workspace: 'live-ollama', agent: 'claude', model: name, source: 'demo', prompt: 'Reply with the single word ok. Do not use any tools.' });
+        // A hijacked task tries Ollama's own port and its model-management path: neither is a model call through the proxy.
+        const P = await api<Task>('POST', '/tasks', { title: 'Reach Ollama directly', workspace: 'live-ollama', worker: 'fake', source: 'demo', prompt: `connect 127.0.0.1:11434 direct.txt` });
+        await settled([T.id, P.id], 900000);
+        const { task: t, events } = await api<{ task: Task; events: LogEvent[] }>('GET', `/tasks/${T.id}`);
+        const cost = events.find((e) => e.type === 'cost' && e.model === name);
+        check(t.model === name && events.some((e) => e.type === 'task.step' && (e.data as { summary?: boolean } | undefined)?.summary), `Claude Code ran on ${name} and answered ("${t.summary?.slice(0, 60)}")`);
+        check(cost?.type === 'cost' && cost.cents === 0 && (cost.tokens?.output ?? 0) > 0, `its tokens are counted (${cost?.type === 'cost' ? cost.tokens?.output : 0} out) and a local model costs nothing`);
+        check(!events.some((e) => e.type === 'net.blocked'), 'every call it made was one the box relays');
+        check(!/^connected/.test(view('live-ollama', 'direct.txt') ?? ''), `a task cannot reach Ollama's port itself, only model calls through the proxy (${view('live-ollama', 'direct.txt')})`);
+        await api('PATCH', '/api/settings', { ollamaHost: '' });
+      },
+  /\bollama\b/.test(process.env.DEMO_LIVE ?? '') ? `Ollama does not answer on ${OLLAMA} on this machine` : 'a local model on a CPU is slow: DEMO_LIVE=ollama ./demo runs it',
+);
+
 // ---------- the action log, followed live ----------
 
-await moment('action log: a live stream for Elastic and Jira', async () => {
+await moment('action log: a live stream for outside readers', async () => {
   const after = (await api<LogEvent[]>('GET', '/log')).length;
   workspace('stream', {});
   const X = await api<Task>('POST', '/tasks', { title: 'Streamed', workspace: 'stream', worker: 'fake', source: 'demo', prompt: 'write s.txt yes' });
@@ -753,7 +882,7 @@ await moment('approvals survive a long wait, never duplicate, and close when the
 
 await moment('pairing and more than one box', async () => {
   const boxes = await api<{ id: string; name: string; self?: boolean }[]>('GET', '/api/boxes');
-  check(boxes[0]?.self && boxes.some((b) => b.id === 'vultr'), `the portal lists ${boxes.length} boxes from one API, including the Vultr box`);
+  check(boxes[0]?.self && boxes.some((b) => b.id === 'second'), `the portal lists ${boxes.length} boxes from one API, including the second box`);
 
   const { code } = await api<{ code: string }>('POST', '/api/pair/start');
   const paired = await api<{ token: string; device: { id: string; name: string } }>('POST', '/api/pair', { code, name: "Judge's phone" });
@@ -1042,9 +1171,8 @@ await moment('security: an outside caller gets nothing, and a folder cannot be t
   check(real.ok && fAnswered?.type === 'approval.answered' && fAnswered.by === 'box screen' && !fAnswered.approved, `a vouched connection can answer, and the log names it "${fAnswered?.type === 'approval.answered' ? fAnswered.by : '?'}", not the "Ben's iPhone" it typed`);
 
   // Routes a track marks as public or self-checked are reachable through a proxy; the rest are not.
-  const mana = await out('GET', '/t/mana/status');
-  const jira = await out('GET', '/t/jira/task?id=none');
-  check(mana.status === 200 && jira.body?.error !== 'pair this phone with this computer first' && (await out('GET', '/t/example/secret-check')).status === 401, `through a proxy, Mana's public status answers (${mana.status}) and Jira's routes reach their own secret check (${jira.status}); other track routes still need a phone`);
+  const open = await out('GET', '/t/example/status');
+  check(open.status === 200 && (await out('GET', '/t/example/secret-check')).status === 401, `through a proxy, an app's open route answers (${open.status}); its other routes still need a phone`);
 
   // Every task field is checked at the door.
   const badSpecs: Record<string, unknown>[] = [
@@ -1187,6 +1315,28 @@ await moment('security: a task cannot lower its spend, read through a link, hang
   const otherPort = await viaTcp('POST', '/api/vault/STOLEN', { value: 'x' }, { origin: `http://localhost:${PORT + 1}` });
   check(rebind.status === 401 && otherPort.status === 401 && !(await api<{ name: string }[]>('GET', '/api/vault')).some((k) => k.name === 'STOLEN'), `a rebound name gets nothing (${rebind.status}), and neither does a page from another port on this machine (${otherPort.status})`);
 
+  // Another account on this machine: only root, the owner and the gurtos group act as the screen (net.ts trustedUid).
+  // Everyone else (another login, a service, a task) needs a paired token, like a phone.
+  const as = (uid: number, p: string, token?: string) =>
+    spawnSync('setpriv', [`--reuid=${uid}`, `--regid=${uid}`, '--clear-groups', 'curl', '-s', '-m', '10', '-o', '/dev/null', '-w', '%{http_code}', ...(token ? ['-H', `authorization: Bearer ${token}`] : []), `http://127.0.0.1:${PORT}${p}`], { encoding: 'utf8' }).stdout.trim();
+  const member = `gurtmate${run}`;
+  const memberUid = 2000 + Math.floor(Math.random() * 500); // a person's uid, not in the task range
+  spawnSync('groupadd', ['-f', '--system', 'gurtos']);
+  spawnSync('useradd', ['-M', '-N', '-u', String(memberUid), '-G', 'gurtos', '-s', '/usr/sbin/nologin', member]);
+  try {
+    const phone = await api<{ token: string }>('POST', '/api/pair', { code: (await api<{ code: string }>('POST', '/api/pair/start')).code, name: 'local phone' });
+    const stranger = [as(65534, '/api/tasks'), as(65534, '/api/vault')];
+    const withToken = [as(65534, '/api/tasks', phone.token), as(65534, '/api/vault', phone.token)];
+    const taskUser = as(39999, '/api/tasks');
+    const inGroup = [as(memberUid, '/api/tasks'), as(memberUid, '/api/vault')];
+    check(stranger.join() === '401,401', `another account on this machine with no token is refused (${stranger.join(', ')})`);
+    check(taskUser === '000', `a task user's connection to the API is refused by the firewall (curl got ${taskUser || 'nothing'})`);
+    check(withToken.join() === '200,403', `with a paired phone's token it reads like a phone (${withToken[0]}), and the owner's controls stay closed (${withToken[1]})`);
+    check(inGroup.join() === '200,200', `a member of the gurtos group is the owner here, with no token (${inGroup.join(', ')}), like root`);
+  } finally {
+    spawnSync('userdel', [member]);
+  }
+
   // Guessing pairing codes: five wrong ones a minute from one address, and that address alone has to wait.
   const guesses: number[] = [];
   for (let i = 0; i < 6; i++) guesses.push((await viaTcp('POST', '/api/pair', { code: `0000000${i}`, name: 'guess' }, { 'x-forwarded-for': '198.51.100.20' })).status);
@@ -1223,17 +1373,17 @@ await moment('security: a task cannot lower its spend, read through a link, hang
   await api('POST', `/api/approvals/${encodeURIComponent(otherAsk.id)}`, { approved: false });
   check(win.status === 200 && page.status === 200 && /sandbox allow-scripts/.test(page.csp) && !/allow-same-origin/.test(page.csp) && ownRoute.status === 200 && readsOk.status === 200 && preflight.status === 204 && preflight.acao === 'null', `an app's page is served sandboxed ("${page.csp.slice(0, 32)}..."), and its window token reaches the app's own routes and the task list`);
   check(refused.every((r) => r.status === 403) && crossAnswer.status === 403, `but not the vault, settings, pairing, another app or another window (${refused.map((r) => r.status).join(' ')}), and it answers only its own app's requests (${crossAnswer.status})`);
-  // Shopper's Face ID page is the one page listed in an app's ownOrigin (WebAuthn needs a real origin); every other page,
-  // Shopper's own app page included, stays sandboxed. The token script goes after a doctype, so no page is in quirks mode.
+  // The example app's /approve page is the one page listed in an app's ownOrigin (a passkey page needs a real origin);
+  // every other page, the example app's own page included, stays sandboxed. The token script goes after a doctype, so no page is in quirks mode.
   const get = (p: string) => new Promise<{ status: number; csp: string; body: string }>((resolve, reject) => {
     http.get({ host: '127.0.0.1', port: PORT, path: p, headers: { accept: 'text/html' } }, (r) => {
       let body = '';
       r.on('data', (c) => (body += c)).on('end', () => resolve({ status: r.statusCode ?? 0, csp: String(r.headers['content-security-policy'] ?? ''), body }));
     }).on('error', reject);
   });
-  const [approvePage, shopperPage] = await Promise.all([get('/t/shopper/approve'), get('/t/shopper/')]);
-  check(approvePage.status === 200 && !/sandbox/.test(approvePage.csp) && /sandbox allow-scripts/.test(shopperPage.csp) && /^<!doctype html><script>/i.test(approvePage.body) && /^<!doctype html><script>/i.test(shopperPage.body),
-    `Shopper's Face ID page keeps the box's own origin (CSP "${approvePage.csp}"), its app page is sandboxed, and each page starts with its doctype, then the token script`);
+  const [approvePage, examplePage] = await Promise.all([get('/t/example/approve'), get('/t/example/')]);
+  check(approvePage.status === 200 && !/sandbox/.test(approvePage.csp) && /sandbox allow-scripts/.test(examplePage.csp) && /^<!doctype html><script>/i.test(approvePage.body) && /^<!doctype html><script>/i.test(examplePage.body),
+    `the example app's own-origin page keeps the box's own origin (CSP "${approvePage.csp}"), its app page is sandboxed, and each page starts with its doctype, then the token script`);
   await api('DELETE', `/api/devices/${(await api<{ id: string; name: string }[]>('GET', '/api/devices')).find((d) => d.name === 'plain phone')!.id}`);
   check((await viaTcp('GET', '/t/example/secret-check', undefined, w)).status === 401, 'removing the phone that opened the window ends the window too');
 

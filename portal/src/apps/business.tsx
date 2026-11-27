@@ -25,8 +25,8 @@ export function askInfo(a: Approval) {
   const app = t ? appOf(t) : { id: 'tasks', title: 'Tasks' };
   const terms = /\b(Net \d+|cash in advance)\b/i.exec(head)?.[1];
   const title = named ? named[1].replace(/,?\s+(Inc|LLC|Co)\.?$/i, '') : head[0].toUpperCase() + head.slice(1);
-  // The credit desk's "approve <customer> for $N" is a credit line; anything else is named by its app.
-  const kind = fraud ? 'Fraud flag' : app.id === 'credit-desk' && /^approve\b/i.test(head) ? 'Credit line' : app.title;
+  // A credit-desk request ("Credit desk [...]: approve <customer> for $N") is a credit line; anything else is named by its app.
+  const kind = fraud ? 'Fraud flag' : /^credit desk\b/i.test(a.question) && /^approve\b/i.test(head) ? 'Credit line' : app.title;
   return {
     title,
     id: named?.[2],
@@ -279,7 +279,6 @@ export function RequestDetail({ id }: { id: string }) {
                 </li>
               ))}
             </ol>
-            {i.app.id === 'credit-desk' && <p class="t-caption t-secondary">Sandbox data from CRS and Capital One Nessie test accounts.</p>}
           </section>
         )
       )}

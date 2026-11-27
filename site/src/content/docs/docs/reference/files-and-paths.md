@@ -97,14 +97,7 @@ Apps keep their own state under `BOX_HOME`:
 |---|---|---|
 | `inbox/example/` | `example` | Files dropped here start a task |
 | `find/` | `find` | `docs.json`, every indexed entry, so a restart needs no new descriptions, and `inference.json` |
-| `jira/` | `jira` | `config.json` (turns syncing on), `people.json`, `jsm.json`, `daily.json` and issue keys |
-| `elastic/` | `elastic` | `outbox.ndjson` (documents waiting for Elastic), `sent` (how far it got), and `requests.json`, the requests it has already answered |
 | `receipts/` | `receipts` | The receipt signing key (`key.json`, root only) and each receipt as `<id>.json` |
-| `fetch/` | `fetch` | The chat agent's seed (root only), its on switch and its outbox |
-| `shopper/` | `shopper` | `orders.jsonl` and `store-events.jsonl` (test store orders and requests), and enrolled passkeys |
-| `wallet/` | `wallet` | `0700`. A durable mark per payment, so one call never pays twice, `payments.jsonl` and `audit.jsonl` |
-| `vultr/` | `vultr` | `firewall.json`, and the backup's `manifest.json` and `last.json` |
-| `credit-desk/` | `credit-desk` | Uploaded cases and the `recheck.on` switch |
 
 ## `/etc/box`
 

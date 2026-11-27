@@ -30,13 +30,13 @@ The box sorts every request into one of these kinds of caller.
 
 | Caller | How the box knows | What it may do |
 |---|---|---|
-| The box's own screen | The request comes over the socket. Or it comes from `127.0.0.1` or `::1` with no proxy header (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `X-Forwarded-Host` or `Tailscale-User-Login`), a `Host` of `127.0.0.1`, `localhost` or `[::1]`, and no `Origin` except the box's own address on the API port | Everything |
+| The box's own screen | The request comes over the socket. Or it comes from `127.0.0.1` or `::1` with no proxy header (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`, `X-Forwarded-Host` or `Tailscale-User-Login`), a `Host` of `127.0.0.1`, `localhost` or `[::1]`, no `Origin` except the box's own address on the API port, and the connection belongs to root, the GurtOS Personal owner or a member of the `gurtos` group | Everything |
 | A helper on the box | The same, but the connecting process runs as `nobody` or as a task user | Read, start tasks and answer approvals. Never the owner's routes below |
 | A paired device | `Authorization: Bearer <token>`, or `?access_token=<token>` for the log stream, which a browser's `EventSource` cannot send headers to | Read, start tasks, undo and answer approvals |
 | A device paired as the owner | A token from a code made with `{"owner": true}` on the box's own screen | Everything a paired device may do, plus the owner's routes below |
 | An app's window | A token from `POST /api/apps/<id>/window`, which starts with `w` | Only that app's own routes, `GET /api/tasks`, `GET /api/tasks/<id>`, `GET /api/approvals`, and answers to that app's own requests. See [App routes](#app-routes) |
 
-A web page from another site, opened in a browser on the box, also arrives from `127.0.0.1`. Its `Origin` (or, for a page that points its own name at `127.0.0.1`, its `Host`) gives it away, so it needs a token. So does a page that another program on the box serves, such as an agent's dev server on `localhost:8000`, unless its origin is named in [`BOX_ORIGINS`](/docs/reference/environment/). A `*` in `BOX_ORIGINS` never counts as the box's own screen.
+Another account on the box (another person's login, a service such as `nobody`, a task user) also arrives from `127.0.0.1`, but the box looks up the account behind the connection and treats it like an outside caller: it needs a token. Add a person with `sudo usermod -aG gurtos <name>`; it takes effect on their next connection. A web page from another site, opened in a browser on the box, also arrives from `127.0.0.1`. Its `Origin` (or, for a page that points its own name at `127.0.0.1`, its `Host`) gives it away, so it needs a token. So does a page that another program on the box serves, such as an agent's dev server on `localhost:8000`, unless its origin is named in [`BOX_ORIGINS`](/docs/reference/environment/). A `*` in `BOX_ORIGINS` never counts as the box's own screen.
 
 Anyone else gets `401` and nothing is read, started, approved or undone. These stay open without a token:
 
@@ -45,7 +45,7 @@ Anyone else gets `401` and nothing is read, started, approved or undone. These s
 - The work-account sign-in: `GET /api/sso`, `GET /api/sso/start`, `GET /api/sso/callback` and `POST /api/sso/redeem`.
 - The portal's own pages and assets, which hold nothing private.
 
-App routes and webhooks need a token too, except routes an app lists in `openRoutes`. A few apps do (Mana, Jira, Apify, Receipts, and Wallet's sell routes). Each checks its own secret, and the owner can turn that off per app in Settings, Permissions.
+App routes and webhooks need a token too, except routes an app lists in `openRoutes`. A few apps do (Receipts, for example). Each checks its own secret, and the owner can turn that off per app in Settings, Permissions.
 
 These routes are the **owner's**. Any other caller gets `403`:
 
@@ -99,7 +99,7 @@ A failed request returns an error status and an object with one field:
 
 ## Cross-origin requests
 
-The portal is served from the same address as the API, so it needs no CORS. The GurtOS web app's origin (`BOX_APP`, `https://app.gurtos.com` by default) is always allowed. The hosted web app can only reach a box at an https address that a relay gives it. A web app served from another origin, such as a development server, needs that origin in `BOX_ORIGINS`:
+The portal is served from the same address as the API, so it needs no CORS. The GurtOS web app's origin (`BOX_APP`, `https://app.gurtos.com` by default) is always allowed. The hosted web app has no relay of its own, so it reaches a box only at the box's own https address. A web app served from another origin, such as a development server, needs that origin in `BOX_ORIGINS`:
 
 ```sh
 BOX_ORIGINS=http://localhost:5173
@@ -113,7 +113,7 @@ The box serves the built portal from `portal/dist` (or the folder in `BOX_PORTAL
 
 ## App routes
 
-An app's routes are served at `/t/<app>/<path>`. For example, the wallet app's page is `/t/wallet/` and the shopper's store is `/t/shopper/store`. The box tells the route who is calling in an `x-box-caller` header that the caller cannot set: `screen`, `owner`, `device:<id>`, `service` (a helper on the box) or `none` (an open route reached with no token). `GET /api/apps` lists the windows of the apps that are on; `GET /api/apps?all=1` lists every installed app, on or off. See [Apps and slots](/docs/concepts/apps-and-slots/).
+An app's routes are served at `/t/<app>/<path>`. For example, the Find app's page is `/t/find/`. The box tells the route who is calling in an `x-box-caller` header that the caller cannot set: `screen`, `owner`, `device:<id>`, `service` (a helper on the box) or `none` (an open route reached with no token). `GET /api/apps` lists the windows of the apps that are on; `GET /api/apps?all=1` lists every installed app, on or off. See [Apps and slots](/docs/concepts/apps-and-slots/).
 
 ### App pages are sandboxed
 
@@ -203,12 +203,12 @@ These routes work on any box and mean something once Business is on. `GET /api/b
 ## Remote access and push notifications
 
 :::note
-A hosted relay is not running during the preview. The code still defaults `BOX_RELAY` to `https://box.gurtos.com`. To use remote access, point the box at a relay you run with `BOX_RELAY` or `PUT /api/remote/relay`. See [Run your own relay](/docs/guides/self-host/) and [Reach your box from anywhere](/docs/guides/reach-your-box-from-anywhere/).
+There is no hosted relay and no default. With no relay set, turning remote access on, push, a test push and Quick Start answer `409` at once with a sentence that says so, and make no request. To use them, point the box at a relay you run with `BOX_RELAY` or `PUT /api/remote/relay`. See [Run your own relay](/docs/guides/self-host/) and [Reach your box from anywhere](/docs/guides/reach-your-box-from-anywhere/).
 :::
 
-- `GET /api/remote` returns `{enabled, name, url, state, error?, relay}`. `state` is `off`, `starting`, `connected` or `error`, and `relay` is the relay's host. The box checks its address again at most every 30 seconds.
+- `GET /api/remote` returns `{enabled, name, url, state, error?, relay}`. `state` is `off`, `starting`, `connected` or `error`, and `relay` is the relay's host, or `null` when none is set. The box checks its address again at most every 30 seconds.
 - `POST /api/remote {"name": "rosa"}` (owner) enrolls the name at the relay, starts the tunnel and the certificate, and returns `state: starting`. Poll `GET /api/remote` until `connected`. A name is 3 to 30 lowercase letters, digits and hyphens. `GET /api/remote/name/<name>` (owner) asks the relay whether a name is free. `DELETE /api/remote` (owner) stops both and releases the name.
-- `GET /api/remote/relay` returns `{url, default, custom}`. `PUT /api/remote/relay {"url": "https://relay.example.com"}` (owner) chooses a relay. It must be an `https://` host name with no path, query or login, and it must resolve only to public addresses. It answers `409` while remote access is on. `{"url": null}` goes back to the default.
+- `GET /api/remote/relay` returns `{url, default, custom}`; `url` and `default` are `null` when no relay is set. `PUT /api/remote/relay {"url": "https://relay.example.com"}` (owner) chooses a relay. It must be an `https://` host name with no path, query or login, and it must resolve only to public addresses. It answers `409` while remote access is on. `{"url": null}` goes back to `BOX_RELAY`, or to none.
 - `GET /api/push`, `PUT /api/push` and `DELETE /api/push` show, set and clear the calling phone's push subscription. `PUT` takes `{subscription, key}` from a paired device only. `POST /api/push/test` sends that phone a test push, or answers `502` with a sentence when it could not be sent, for example because the relay is not answering. Pushes go through the relay, so they need remote access on.
 - Quick Start sets up a new computer from one you own: `POST /api/quickstart/start` on the new computer's own screen during setup, `GET /api/quickstart` and `POST /api/quickstart/stop` for the owner, and `POST /api/quickstart/send` and `POST /api/quickstart/send/<id>` from an owner phone on the source computer.
 
@@ -224,7 +224,7 @@ A phone pairs once and gets its own device token:
 
 Wrong codes are limited to 5 a minute from one address and 60 a minute overall, then `429`. The address is the one a proxy on the box put last in `X-Forwarded-For`.
 
-An `iphone` device can ask for a separate token for its Apple Watch with `POST /api/devices/self/watch`. The Watch token is never the owner's. It approves only up to Settings `watchLimitCents`, never a Business or Shopper request, and may always deny.
+An `iphone` device can ask for a separate token for its Apple Watch with `POST /api/devices/self/watch`. The Watch token is never the owner's. It approves only up to Settings `watchLimitCents`, never a Business request, and may always deny.
 
 The older names `POST /api/pair/new`, `GET /api/pair/devices` and `POST /api/pair/devices/<id>/revoke` still work. A `GET /pair` is a portal page, not an API route.
 

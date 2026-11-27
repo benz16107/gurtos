@@ -24,10 +24,10 @@ Replay and setup from another computer ([release notes](release/notes/v0.2.0-pre
   network, with the `gurtos` command or an MCP server (see [AGENT-SETUP.md](AGENT-SETUP.md)).
 - 41 OS-level attacks run against a real box in the merge gate. 36 are caught; 5 are not covered (data sent out
   through a host the task was allowed to reach, three ways tasks share the machine's network space, and a command
-  that skips Droid's second look): [`tracks/armadin/SCOREBOARD.md`](tracks/armadin/SCOREBOARD.md).
+  that skips Droid's second look): [`tracks/attacks/SCOREBOARD.md`](tracks/attacks/SCOREBOARD.md).
 - A first threat model on the docs site: [gurtos.com/docs/security/threat-model](https://gurtos.com/docs/security/threat-model/).
 - A relay for remote access and phone push that anyone can run with one command ([`relay/`](relay/),
-  [`docs/self-host.md`](docs/self-host.md)). Our hosted relay at `box.gurtos.com` is offline.
+  [`docs/self-host.md`](docs/self-host.md)). The hosted relay at `box.gurtos.com` is offline, and nothing defaults to it: with no relay set, remote access and push say so at once.
 
 ## Before 1.0
 

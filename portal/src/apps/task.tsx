@@ -1,7 +1,7 @@
 // One task's window (Figma 84:4845): its state, cost, blocked attempts, steps from the log, the files it changed
 // and what it was allowed. Undo task is the header bar's main action, behind an alert (84:5090).
 import { useEffect, useState } from 'preact/hooks';
-import { api, box, hosted, machine, onEvent, undo, useBox, type Approval, type LogEvent, type Task } from '../live.ts';
+import { agentTitle, api, box, hosted, machine, onEvent, undo, useBox, type Approval, type LogEvent, type Task } from '../live.ts';
 import { Alert, AppIcon, Badge, Button, Icon, IconButton, Menu, Popover, StatusPage } from '../kit/ui.tsx';
 import { HeaderBar, open, useWin } from '../wm.tsx';
 import { STATE, appOf, clock, dollars, needsModelKey, sentence, taskTitle, testMoney } from '../util.ts';
@@ -197,7 +197,7 @@ export function TaskApp({ id }: { id: string }) {
                 <Icon name="dialog-password" />
                 <div>
                   <p class="t-body-strong">No model key, so the agent could not think</p>
-                  <p class="t-body">Add an Anthropic or Factory API key in Settings, then start the task again.</p>
+                  <p class="t-body">Add a key for this task's agent in Settings, then start the task again.</p>
                 </div>
                 <Button kind="suggested" onClick={() => open('settings/agents')}>
                   Add a model key
@@ -272,7 +272,7 @@ export function TaskApp({ id }: { id: string }) {
               </div>
               <div class="gos-w-fact">
                 <span>Agent</span>
-                <span>{t.worker === 'droid' ? 'Claude' : 'Scripted (test)'}</span>
+                <span>{agentTitle(t.worker)}</span>
               </div>
               {t.model && (
                 <div class="gos-w-fact">

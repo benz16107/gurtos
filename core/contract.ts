@@ -21,11 +21,19 @@ export interface TaskSpec {
   prompt: string;
   /** Name of a folder in BOX_HOME/workspaces. The task works on its own copy of it. Default 'home'. */
   workspace?: string;
-  /** Default 'droid'. 'fake' runs scripted steps with no model, for tests. */
-  worker?: 'droid' | 'fake';
   /**
-   * Droid worker: the Claude model, 'haiku' (cheap checks, photo descriptions), 'sonnet' (most work, the default)
-   * or 'opus' (hard tasks), or a full model id. The task records the id it ran on.
+   * The agent that does the work: 'droid' (Factory's Droid), 'claude' (Claude Code), 'codex' (Codex CLI) or
+   * 'opencode'; the table is core/workers/index.ts. 'fake' runs scripted steps with no model, for tests.
+   * Default: the owner's setting `defaultAgent` ('auto' on a new box: the first agent that has a model service).
+   */
+  worker?: string;
+  /** The same as `worker`, under the name the screens use. Send one of the two. */
+  agent?: string;
+  /**
+   * The model. A Claude alias, 'haiku' (cheap checks, photo descriptions), 'sonnet' (most work, the default for
+   * Claude) or 'opus' (hard tasks), or a full model id. An upstream in front picks the model service:
+   * 'ollama/qwen3' (a local model), 'custom/my-model' (the owner's own endpoint), 'openai/<id>'. Without one the
+   * agent's first service that is set up is used. Droid runs Claude models only. The task records what it ran on.
    */
   model?: string;
   /** Tool names the task may call through the broker. Default none. */
@@ -62,7 +70,7 @@ export interface DroidOptions {
 }
 
 /** A TaskSpec with its defaults filled in. */
-export type FullSpec = Required<Omit<TaskSpec, 'folder' | 'folders' | 'seat' | 'droid' | 'model'>> & { folder?: string; folders?: string[]; seat?: string; droid?: DroidOptions; model?: string };
+export type FullSpec = Required<Omit<TaskSpec, 'folder' | 'folders' | 'seat' | 'droid' | 'model' | 'agent'>> & { folder?: string; folders?: string[]; seat?: string; droid?: DroidOptions; model?: string };
 
 export interface Task extends FullSpec {
   id: string;
@@ -343,7 +351,7 @@ export interface App {
 
 /**
  * A track's HTTP route. `req.headers.get('x-box-caller')` says who is calling, set by the box (a copy the caller
- * sends is replaced): 'screen', 'owner', 'device:<id>', 'service' or 'none'.
+ * sends is replaced): 'screen', 'owner', 'device:<id>' or 'none'.
  */
 export type Route = (req: Request, box: Box) => Response | Promise<Response>;
 

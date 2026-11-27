@@ -94,15 +94,32 @@ export interface Settings {
   updateChannel: 'stable' | 'beta';
   autoUpdate: boolean;
   appearance: { theme: 'light' | 'dark' | 'system'; accent: string };
+  /** The agent of a task that names none: 'auto', or an agent's name. */
+  defaultAgent: string;
+  /** Where Ollama listens, and the owner's own model endpoint with the format it speaks. Empty: off. */
+  ollamaHost: string;
+  customBaseUrl: string;
+  customWire: 'anthropic' | 'openai';
 }
+/** The agents a task can run on (GET /api/setup): which can start now, and which the box picks when a task names none. */
+export interface AgentsView {
+  default: string;
+  setting: string;
+  list: { name: string; title: string; upstreams: string[]; via: string[]; ready: boolean; installed: boolean }[];
+  upstreams: { id: string; title: string; ready: boolean; key?: string; keySet?: boolean }[];
+}
+/** An agent's name for a person: "Claude Code" for 'claude'. */
+export const agentTitle = (worker: string) => (worker === 'fake' ? 'Scripted (test)' : (box.setup?.agents?.list.find((a) => a.name === worker)?.title ?? worker));
 /** Command setup: an agent on another computer sets this one up with a one-time code (core's /api/setup/code). */
 /** The code and its time limit come only from POST /api/setup/code; GET /api/setup carries the rest ({open: false} when closed). */
 export interface SetupChannel { code?: string; expiresAt?: string; open: boolean; port?: number; urls?: string[]; remote?: string; devices?: { name: string; since?: string }[] }
-export interface SetupState { done: boolean; /** false until the vault holds a model key: no task can start. */ modelKey?: boolean; finishedAt?: string; migrated?: boolean; steps: Record<string, { at: string; data?: any }>; suggested: string[]; channel?: SetupChannel | null }
+export interface SetupState { done: boolean; /** false until the vault holds a model key: no task can start. */ modelKey?: boolean; agents?: AgentsView; finishedAt?: string; migrated?: boolean; steps: Record<string, { at: string; data?: any }>; suggested: string[]; channel?: SetupChannel | null }
 export interface System {
   product: string;
   edition: string;
   editionName: string;
+  /** image: a GurtOS image with A/B updates. checkout: installed on Ubuntu with install.sh, updated by running it again. */
+  install?: 'image' | 'checkout';
   version: string;
   build: string;
   hostname: string;

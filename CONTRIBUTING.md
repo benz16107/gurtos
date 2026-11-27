@@ -2,7 +2,10 @@
 
 Thanks for looking. GurtOS is a preview maintained by one person, so expect rough edges and slow replies. Issues
 and pull requests are welcome. Please read the [Code of Conduct](CODE_OF_CONDUCT.md) first, and see the
-[roadmap](ROADMAP.md) for what is planned and what is not.
+[roadmap](ROADMAP.md) for what is planned and what is not. Issues labelled
+[good first issue](https://github.com/benz16107/gurtos/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+are small, say which files to read, and need no test VM unless they say so. Questions and ideas go in
+[Discussions](https://github.com/benz16107/gurtos/discussions).
 
 **Security problems:** report them privately, as [SECURITY.md](SECURITY.md) describes, not in a public issue.
 
@@ -15,7 +18,7 @@ git clone https://github.com/benz16107/gurtos.git gurtos
 cd gurtos
 npm ci                    # the box, the relay and the apps
 npm ci --prefix portal    # the portal's own packages; its tests import them
-npm test                  # unit tests
+npm test                  # unit tests, about 2 seconds, no VM or keys
 npm run check             # type check
 node release/check.ts     # no keys, machine names, addresses or private emails in committed files
 ```
@@ -64,8 +67,9 @@ BOX_SHELL='ssh my-vm' DEMO_ONLY=example ./demo     # one app's step (the folder 
 To name your VMs once, put lines like `myvm=ssh my-vm` in `~/.config/gurtos/machines` (not in the repository).
 Then `./demo myvm` uses that line, and a line named `default` makes plain `./demo` use it.
 
-To keep a box running on the VM, `sudo core/install.sh` there installs this checkout as the box service in
-`/opt/box`, with its API on `127.0.0.1:7700`. Put keys only in the VM's `/etc/box/vault.env` (root, mode 0600,
+To keep a box running on the VM, `./install.sh` there installs this checkout as the box service in `/opt/box`, with
+its API on `127.0.0.1:7700`, and adds you to the `gurtos` group, whose members (and root) act as the box's own
+screen from the VM. `./install.sh --uninstall` removes it. Put keys only in the VM's `/etc/box/vault.env` (root, mode 0600,
 `NAME=value` lines), never in the repository. To work on the portal against a live box, see
 [portal/README.md](portal/README.md).
 
@@ -92,6 +96,7 @@ git commit -s -m "Say what changed"      # adds: Signed-off-by: Your Name <you@e
 The name and address come from `git config user.name` and `user.email`. If you do not want your email address in a
 public repository, use the private address GitHub gives you (`<id>+<name>@users.noreply.github.com`, in your email
 settings). To sign off commits you already made: `git rebase --signoff origin/main`, then push.
+A check on every pull request fails when a commit has no `Signed-off-by` line.
 
 ## Where things go
 

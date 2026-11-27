@@ -1,0 +1,36 @@
+# Fails a pull request when any of its commits has no Signed-off-by line (see CONTRIBUTING.md, "Sign your commits").
+# No third-party app: it reads the commit messages with git. Merge commits and bot commits are skipped.
+name: DCO
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dco:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Every commit has a Signed-off-by line
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          bad=0
+          for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            case "$(git log -1 --format=%ae "$sha")" in *'[bot]@users.noreply.github.com') continue ;; esac # Dependabot
+            if ! git log -1 --format=%B "$sha" | grep -Eq '^Signed-off-by: .+ <.+>$'; then
+              echo "::error::Commit $sha has no Signed-off-by line: $(git log -1 --format=%s "$sha")"
+              bad=1
+            fi
+          done
+          if [ "$bad" = 1 ]; then
+            echo "Add one with: git commit --amend -s   (or git rebase --signoff $BASE for several commits)"
+            exit 1
+          fi

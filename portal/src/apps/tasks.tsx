@@ -2,7 +2,7 @@
 // its state, what it does now, its cost of its budget, and a summary strip. And one task's own window.
 import type { JSX } from 'preact';
 import { useState } from 'preact/hooks';
-import { api, box, pairing, surface, undo, useBox, type Task } from '../live.ts';
+import { agentTitle, api, box, pairing, surface, undo, useBox, type Task } from '../live.ts';
 import { Alert, AppIcon, Badge, Button, ContextMenu, Icon, IconButton, Menu, Popover, Progress, Sheet, StatusPage, ToggleGroup, type MenuItem } from '../kit/ui.tsx';
 import { HeaderBar, InWindow, open, useWin } from '../wm.tsx';
 import { STATE, appOf, approvalFor, dollars, hhmm, needsModelKey, ofState, pending, plural, spentToday } from '../util.ts';
@@ -266,9 +266,13 @@ function NewTaskSheet({ onClose }: { onClose: () => void }) {
   const [prompt, setPrompt] = useState('');
   const [hosts, setHosts] = useState((b.settings?.networkDefault === 'allowlist' ? b.settings.defaultHosts : []).join(', '));
   const [budget, setBudget] = useState(b.settings?.defaultBudgetCents ? (b.settings.defaultBudgetCents / 100).toFixed(2) : '');
+  const [agent, setAgent] = useState('');
+  const [model, setModel] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const noKey = b.setup?.modelKey === false;
+  const agents = b.setup?.agents;
+  const picked = agents?.list.find((a) => a.name === (agent || agents.default));
   const go = async () => {
     setBusy(true);
     setError('');
@@ -279,6 +283,8 @@ function NewTaskSheet({ onClose }: { onClose: () => void }) {
         // Who started it, for the log, the task window and Jira: the paired device's name, else "box screen" or "portal".
         source: pairing()?.device.name ?? surface,
         hosts: hosts.split(/[\s,]+/).filter(Boolean),
+        ...(agent ? { agent } : {}),
+        ...(model.trim() ? { model: model.trim() } : {}),
         ...(budget.trim() ? { budgetCents: Math.round(parseFloat(budget) * 100) } : {}),
       });
       box.tasks.set(t.id, t);
@@ -308,6 +314,30 @@ function NewTaskSheet({ onClose }: { onClose: () => void }) {
           <span class="t-body-strong">What to do</span>
           <textarea class="g-field gos-textarea" rows={5} value={prompt} placeholder="Add this month's internet bill and write a one-line summary." onInput={(e) => setPrompt((e.target as HTMLTextAreaElement).value)} />
         </label>
+        {agents && (
+          <label class="gos-field">
+            <span class="t-body-strong">Agent</span>
+            <select class="g-field" value={agent} onChange={(e) => setAgent((e.target as HTMLSelectElement).value)}>
+              <option value="">Default ({agentTitle(agents.default)})</option>
+              {agents.list.map((a) => (
+                <option value={a.name} key={a.name}>
+                  {a.title}
+                  {a.ready ? '' : ' (not set up yet)'}
+                </option>
+              ))}
+            </select>
+            <span class="t-caption t-secondary">
+              {picked && !picked.ready ? `${picked.title} has no model key or address yet. Add one in Settings, Agents & Models.` : 'The agent never holds your key. GurtOS adds it to each model call on the way out.'}
+            </span>
+          </label>
+        )}
+        {agents && (
+          <label class="gos-field">
+            <span class="t-body-strong">Model</span>
+            <input class="g-field" value={model} maxLength={100} placeholder="The agent's default" spellcheck={false} onInput={(e) => setModel((e.target as HTMLInputElement).value)} />
+            <span class="t-caption t-secondary">Leave empty, or name one: sonnet, ollama/qwen3 for a local model, custom/a-model for your own endpoint.</span>
+          </label>
+        )}
         <label class="gos-field">
           <span class="t-body-strong">Hosts it may reach</span>
           <input class="g-field" value={hosts} placeholder="None" onInput={(e) => setHosts((e.target as HTMLInputElement).value)} />

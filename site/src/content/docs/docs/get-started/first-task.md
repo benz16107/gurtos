@@ -9,7 +9,8 @@ watch GurtOS stop a connection the task was not allowed to make, and approve a t
 
 You need a running box with a model key in its vault: `ANTHROPIC_API_KEY` or `FACTORY_API_KEY`, and a shell on the
 box. If you do not have one yet, follow [Install on Ubuntu](/docs/get-started/install-on-ubuntu/). Run the commands on
-the box itself, or through an SSH session with the box's port forwarded. A release build of GurtOS Server has no shell
+the box itself, or through an SSH session with the box's port forwarded, as root or as a member of the `gurtos` group
+(the installer adds you). Another account gets `401`. A release build of GurtOS Server has no shell
 and no SSH, so on one of those, use the portal on its screen instead of these commands. A debug build allows SSH as
 root.
 

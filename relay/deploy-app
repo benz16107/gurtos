@@ -5,20 +5,21 @@
 # Roll back: `vercel rollback` in the deploy folder, or promote the previous deployment in Vercel's dashboard.
 #
 # For your own copy (docs/self-host.md): build portal/dist first, then
-#   RELAY_DOMAIN=box.example.com VERCEL_PROJECT=my-app relay/deploy-app    deploy to your Vercel project
-#   RELAY_DOMAIN=box.example.com relay/deploy-app --out <dir>              only write the files and headers to <dir>
+#   RELAY_DOMAIN=relay.example.com VERCEL_PROJECT=my-app relay/deploy-app    deploy to your Vercel project
+#   RELAY_DOMAIN=relay.example.com relay/deploy-app --out <dir>              only write the files and headers to <dir>
 # RELAY_DOMAIN goes into the Content-Security-Policy, so the browser lets the app reach your relay and your boxes. The
-# iPhone and Android link files name our apps, so they are left out when it is not box.gurtos.com.
+# iPhone and Android link files name GurtOS's own apps, so they are left out unless VERCEL_PROJECT is gurtos-app.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-DOMAIN=${RELAY_DOMAIN:-box.gurtos.com}
-[[ $DOMAIN =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || { echo "relay/deploy-app: RELAY_DOMAIN must be a lowercase domain name like box.example.com, got \"$DOMAIN\"" >&2; exit 2; }
+DOMAIN=${RELAY_DOMAIN:?"set RELAY_DOMAIN to your relay domain, like relay.example.com"}
+[[ $DOMAIN =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || { echo "relay/deploy-app: RELAY_DOMAIN must be a lowercase domain name like relay.example.com, got \"$DOMAIN\"" >&2; exit 2; }
 [[ -f portal/dist/index.html ]] || { echo "relay/deploy-app: portal/dist is missing; run 'npm run build' in portal/ first" >&2; exit 2; }
 if [[ ${1:-} == --out ]]; then out=${2:?usage: relay/deploy-app --out <dir>}; else out=$(mktemp -d)/gurtos-app; fi
 mkdir -p "$out"
 cp -r portal/dist/. "$out/"
-sed "s/box\.gurtos\.com/$DOMAIN/g" relay/app/vercel.json > "$out/vercel.json"
-if [[ $DOMAIN == box.gurtos.com ]]; then
+# The committed policy names no relay. This adds yours: the relay's API, and the boxes' names under it.
+sed -e "s#connect-src 'self'#& https://$DOMAIN https://*.$DOMAIN#" -e "s#frame-src 'none'#frame-src https://*.$DOMAIN#" -e "s#img-src 'self' data: blob:#& https://*.$DOMAIN#" relay/app/vercel.json > "$out/vercel.json"
+if [[ ${VERCEL_PROJECT:-gurtos-app} == gurtos-app ]]; then # only our own project: the link files name GurtOS's apps
   cp -r relay/app/.well-known "$out/" # the Android app (Digital Asset Links) and the iPhone app (universal links for /pair)
 fi
 if [[ ${1:-} == --out ]]; then echo "relay/deploy-app: wrote $out (serve it with the headers and the index.html fallback from $out/vercel.json)"; exit; fi

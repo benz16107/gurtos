@@ -75,9 +75,9 @@ class AskWindow(Adw.ApplicationWindow):
         self.budget = Adw.ComboRow(title='Budget', subtitle='It asks before spending more. Model use counts.',
                                    model=Gtk.StringList.new([dollars(c) for c in ASK_BUDGETS]), selected=1)
         self.list.append(self.budget)
-        worker = Adw.ActionRow(title='Model')
+        worker = Adw.ActionRow(title='Agent')
         worker.add_prefix(Gtk.Image(icon_name='applications-science-symbolic'))
-        worker.add_suffix(Gtk.Label(label='Claude', css_classes=['gurt-secondary']))
+        worker.add_suffix(Gtk.Label(label='The default in Settings', css_classes=['gurt-secondary']))
         self.list.append(worker)
         body.append(self.list)
         # Why Start is off, when it is: no model key yet, or Droid still arriving. Checked before Start, not after.

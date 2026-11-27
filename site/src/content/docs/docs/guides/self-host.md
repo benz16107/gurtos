@@ -6,11 +6,11 @@ sidebar:
 ---
 
 A GurtOS box works on its own at its home address, with no relay. A relay adds three things for boxes behind a home
-router: a public address for each box (`https://rosa.box.example.com`), a gateway that forwards push notifications to
+router: a public address for each box (`https://rosa.relay.example.com`), a gateway that forwards push notifications to
 phones, and a place for a phone and a computer to meet while they pair.
 
-A box looks for the relay at `box.gurtos.com` and the web app at `app.gurtos.com`. As of October 29, 2026 the hosted
-relay is not running, so remote access and push work only through a relay you run. This page says how to run one and
+A box has no default relay. The hosted relay at `box.gurtos.com` is offline, so remote access and push work only through
+a relay you run, named in `BOX_RELAY` or in Settings. This page says how to run one and
 point your boxes at it. `app.gurtos.com` is still up, but it can only reach boxes through the relay it was built for,
 so a self-hosted setup needs its own copy of the web app too (step 4).
 
@@ -38,8 +38,8 @@ and Apple and Google credentials. The [roadmap](/docs/project/roadmap/) lists th
 
 - One small Linux machine with a public IPv4 address that you can ssh into as root. Ubuntu 24.04, 1 vCPU and 1 GB of
   memory is enough. The relay listens on IPv4 only.
-- A domain you control, and a name under it for the relay. These examples use `box.example.com`, so a box named
-  `rosa` is reached at `rosa.box.example.com`.
+- A domain you control, and a name under it for the relay. These examples use `relay.example.com`, so a box named
+  `rosa` is reached at `rosa.relay.example.com`.
 - Inbound ports 80, 443 and 7000 open to the machine, in your cloud provider's firewall as well as on the machine.
   Port 7000 is where boxes connect their tunnels.
 - `rsync` and `ssh` on the computer you deploy from. The relay machine needs `curl`, `openssl`, `tar` and `xz`, which
@@ -52,8 +52,8 @@ and Apple and Google credentials. The [roadmap](/docs/project/roadmap/) lists th
 Point the relay name and every name under it at the machine:
 
 ```
-A   box.example.com      <relay's IPv4 address>
-A   *.box.example.com    <relay's IPv4 address>
+A   relay.example.com      <relay's IPv4 address>
+A   *.relay.example.com    <relay's IPv4 address>
 ```
 
 Both records are needed. The first serves the relay's own API, and the wildcard routes each box's name to its
@@ -65,7 +65,7 @@ name and takes raw TCP on port 7000. A 10-minute TTL is a good start.
 From a checkout of this repository, with an ssh config entry named `relaybox` for the machine (root login):
 
 ```sh
-RELAY_DOMAIN=box.example.com relay/deploy relaybox
+RELAY_DOMAIN=relay.example.com relay/deploy relaybox
 ```
 
 The script is safe to run again. It installs frp 0.71.1 and Caddy 2.11.7 (checking their SHA-256 sums) and Node.js,
@@ -76,8 +76,8 @@ relay's user. It opens ports 80, 443 and 7000 in `ufw` when `ufw` is installed.
 Check it:
 
 ```sh
-curl https://box.example.com/v1/status      # {"ok":true,"domain":"box.example.com","boxes":0}
-curl https://box.example.com/v1/push/key    # the push public key
+curl https://relay.example.com/v1/status      # {"ok":true,"domain":"relay.example.com","boxes":0}
+curl https://relay.example.com/v1/push/key    # the push public key
 ```
 
 Caddy asks Let's Encrypt for the relay's certificate when it starts, which takes a few seconds. If `curl` fails with
@@ -105,16 +105,16 @@ There are two ways. Either one works only while remote access is off.
 ### In Settings or with the API
 
 On GurtOS Server's screen, or a phone paired as the owner, open **Settings**, **Remote access** while remote access
-is off. Type your relay's address under **Relay** and choose **Save**. **Use the default** goes back. The Relay row
-shows while the default relay is not answering, or once you have chosen your own. This is the way on GurtOS Server,
+is off. Type your relay's address under **Relay** and choose **Save**. **Remove** goes back to `BOX_RELAY`, or to none. The Relay row
+shows while no relay is set or the relay is not answering, or once you have chosen your own. This is the way on GurtOS Server,
 which has no shell. GurtOS Personal's own Settings has no Relay field yet: use the API or the environment.
 
 The same setting through the API, from the box itself or with an owner device's token:
 
 ```sh
 curl -s -X PUT http://127.0.0.1:7700/api/remote/relay \
-  -H 'content-type: application/json' -d '{"url": "https://box.example.com"}'
-# {"url":"https://box.example.com","default":"https://box.gurtos.com","custom":true}
+  -H 'content-type: application/json' -d '{"url": "https://relay.example.com"}'
+# {"url":"https://relay.example.com","default":null,"custom":true}
 ```
 
 The box saves the choice in `BOX_HOME/relay.json`, so it survives restarts and system updates. It refuses an address
@@ -136,13 +136,13 @@ sudo systemctl edit box.service
 
 ```ini
 [Service]
-Environment=BOX_RELAY=https://box.example.com
+Environment=BOX_RELAY=https://relay.example.com
 Environment=BOX_APP=https://app.example.com
 ```
 
 ```sh
 sudo systemctl restart box.service
-curl -s http://127.0.0.1:7700/api/remote     # "relay":"box.example.com"
+curl -s http://127.0.0.1:7700/api/remote     # "relay":"relay.example.com"
 ```
 
 A box built from this repository on your own machine can do the same with a drop-in file, or by exporting the two
@@ -154,7 +154,7 @@ curl -s -X POST http://127.0.0.1:7700/api/remote -H 'content-type: application/j
 ```
 
 The box asks the relay for the name, the relay answers with a secret, and the box opens its tunnel and gets its
-certificate. After a few seconds `https://rosa.box.example.com` answers from outside your network, and
+certificate. After a few seconds `https://rosa.relay.example.com` answers from outside your network, and
 `GET /api/remote` says `"state":"connected"`. A paired device's token is still required, exactly as on the home
 network. A name is 3 to 30 lowercase letters, digits and hyphens, and a short list of names is reserved.
 
@@ -174,7 +174,7 @@ grep -rn "gurtos\.com" portal/src | grep -v "[0-9]: *\(//\|/\*\)"
 
 Two lines in `portal/src/relay.ts` decide whether the app works, and every other mention in the portal follows them:
 
-- `export const RELAY = 'https://box.gurtos.com'`: change it to your relay.
+- `export const RELAY: string | undefined = undefined`: set it to your relay's address, like `'https://relay.example.com'`.
 - `export const APP = 'https://app.gurtos.com'`: change it to your app's address. The app turns on its hosted mode (a
   list of machines, none of them this page's own address) only on that host, and accepts scanned pairing links only
   from it. Without the change your app behaves like a box's own screen and finds no machine.
@@ -185,15 +185,15 @@ Keep `SELF_HOST_DOCS`, which links to this page. Then build and publish:
 npm ci
 cd portal && npm ci && npm run build      # writes portal/dist
 cd ..
-RELAY_DOMAIN=box.example.com relay/deploy-app --out /tmp/gurtos-app
+RELAY_DOMAIN=relay.example.com relay/deploy-app --out /tmp/gurtos-app
 ```
 
 `relay/deploy-app --out` copies `portal/dist` and the headers file to the folder with your relay's domain in the
-Content-Security-Policy, which is what lets the browser reach your relay and `https://*.box.example.com`. Host that
+Content-Security-Policy, which is what lets the browser reach your relay and `https://*.relay.example.com`. Host that
 folder at `https://app.example.com` with the headers from its `vercel.json`. Every route must fall back to
 `index.html` (the rewrite in the same file), because the app uses paths such as `/pair`.
 
-On Vercel, `RELAY_DOMAIN=box.example.com VERCEL_PROJECT=my-app relay/deploy-app` does the same and deploys to your
+On Vercel, `RELAY_DOMAIN=relay.example.com VERCEL_PROJECT=my-app relay/deploy-app` does the same and deploys to your
 project. It needs the Vercel CLI, logged in.
 
 ## 5. Push notifications
@@ -256,10 +256,10 @@ outbound TCP 7000.
 ## Known gaps
 
 - The web app's relay address and its hosted-mode host are edited in source, not set by configuration.
-- A box also serves its own copy of the web app, built for `box.gurtos.com`. Opened at the box's https address on
+- A box also serves its own copy of the web app, built with no relay address. Opened at the box's https address on
   your relay, that copy cannot turn on push notifications. Use your own web app for push.
-- GurtOS Server has no shell to set `BOX_APP`, so with remote access on its pairing QR codes open `app.gurtos.com`,
-  which cannot reach your relay's names. On the phone, open `https://<name>.box.example.com/pair#<code>` instead.
+- With `BOX_APP` unset, a box with remote access on opens its pairing page at `https://<name>.relay.example.com/pair#<code>`
+  on your relay, not at `app.gurtos.com`, which has no relay of its own.
 - The native apps and APNs cannot be redirected without rebuilding them.
 - There is no multi-relay or failover. If your relay is down, boxes are reachable on their home network only.
 - This setup was run on one test domain with a private certificate authority. A run against Let's Encrypt on a public

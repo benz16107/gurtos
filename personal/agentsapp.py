@@ -51,7 +51,7 @@ def row(title, subtitle='', icon=None, activate=None, suffix=None):
 
 
 def short(title):
-    """An app's name without its bracketed note, as the portal shows it: "Agent wallet", "Shopper"."""
+    """An app's name without its bracketed note, as the portal shows it: "Find", "Factory"."""
     return title.split(' (')[0].strip() or title
 
 

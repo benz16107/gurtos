@@ -1,5 +1,6 @@
 ---
 import Landing from '../layouts/Landing.astro';
+import Command from '../components/Command.astro';
 import { NAME, REPO } from '../product.ts';
 
 const RELEASE = `${REPO}/releases/download/v0.2.0-preview`;
@@ -21,13 +22,21 @@ const archs = [
 ] as const;
 const file = (e: string, a: string) => `gurtos-${e}-${a}.iso`;
 const url = (e: string, a: string) => `${RELEASE}/${file(e, a)}`;
+const INSTALL = 'curl -fsSL https://gurtos.com/install.sh | sh';
 ---
 
-<Landing title="Download GurtOS" description="Download GurtOS v0.2.0-preview, the signed install images for GurtOS Server and GurtOS Personal, with checksums, minimum hardware and install steps." prose={false}>
+<Landing title="Download GurtOS" description="Install GurtOS v0.2.0-preview on an existing Ubuntu 24.04 machine with one command, or download the signed install images for GurtOS Server and GurtOS Personal, with checksums and steps for a Mac." prose={false}>
   <div class="wrap dl-page">
     <section class="top" aria-labelledby="dl-h">
       <h1 id="dl-h">Download {NAME} v0.2.0-preview</h1>
-      <p class="lead">Signed install images, built on Ubuntu 24.04. This is a preview that has not had a security audit. Use a spare computer or a virtual machine, because the installer erases the disk it installs to.</p>
+      <p class="lead">Add {NAME} to an Ubuntu 24.04 machine you already have, or install it as the whole OS from an image. This is a preview with no outside security audit, so use a VM or a spare machine with test keys. Every file is on the <a href={`${REPO}/releases/tag/v0.2.0-preview`}>release page</a> with checksums and a signature.</p>
+
+      <h2 id="ubuntu" class="step-h">On Ubuntu 24.04, keeping your disk</h2>
+      <div class="cmd"><Command cmd={INSTALL} label="Copy the install command" /></div>
+      <p class="step-note">For Ubuntu 24.04 on x86_64 or arm64, with sudo and 4 GB of memory. It adds the box service, the task users and one nftables rule, and leaves the rest of the system as it is. The service runs as root, so pick a machine set aside for it. <a href="https://gurtos.com/install.sh">Read the script</a> · <a href="/docs/get-started/install-on-ubuntu/">Install guide</a></p>
+
+      <h2 id="iso" class="step-h">Install images</h2>
+      <p class="step-note">Each image installs {NAME} as the whole operating system and erases the disk it installs to.</p>
 
       <div class="big">
         {editions.map((e) => (
@@ -41,7 +50,7 @@ const url = (e: string, a: string) => `${RELEASE}/${file(e, a)}`;
     </section>
 
     <section aria-labelledby="all-h">
-      <h2 id="all-h">All downloads</h2>
+      <h2 id="all-h">All install images</h2>
       <div class="table-wrap">
         <table class="chooser">
           <thead>
@@ -66,6 +75,21 @@ const url = (e: string, a: string) => `${RELEASE}/${file(e, a)}`;
           </tbody>
         </table>
       </div>
+    </section>
+
+    <section aria-labelledby="mac">
+      <h2 id="mac">On a Mac</h2>
+      <p class="apps-lead">{NAME} needs a Linux kernel, so on a Mac it runs in a virtual machine. On an Apple silicon Mac, use the arm64 files.</p>
+      <ol class="mac-steps">
+        <li>
+          <p><strong>With Lima</strong>, from Terminal. This makes an Ubuntu 24.04 VM and opens a shell in it:</p>
+          <pre>{`brew install lima
+limactl start --name=gurtos template:ubuntu-24.04
+limactl shell gurtos`}</pre>
+          <p>Then run the install command above inside that shell.</p>
+        </li>
+        <li><p><strong>With UTM</strong>, make an Ubuntu 24.04 VM and run the install command in it. Or attach <code>gurtos-server-arm64.iso</code> or <code>gurtos-personal-arm64.iso</code> as the new VM's CD and install the whole OS. The <a href="/docs/get-started/install-server/">Server install guide</a> covers UTM step by step.</p></li>
+      </ol>
     </section>
 
     <section aria-labelledby="apps-h">
@@ -134,7 +158,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing      # macOS`}</pre>
       </details>
 
       <details>
-        <summary>Install steps</summary>
+        <summary>Install steps for an image</summary>
         <ol>
           <li>Write the ISO to a USB stick (balenaEtcher, or <code>sudo dd if=&lt;file&gt;.iso of=/dev/sdX bs=4M status=progress</code>), or attach it to a VM as its disc. On a cloud VM such as Vultr, add the ISO by its URL as a custom ISO.</li>
           <li>Start from it. On a computer with one empty disk it installs in a few minutes. With several disks it lists them and asks which one. A disk with data on it, or a USB disk, is erased only after you type <code>erase</code>.</li>
@@ -203,14 +227,21 @@ image/build personal        # GurtOS Personal`}</pre>
   .dl-page { padding-bottom: 2rem; }
   .top { padding: 3.5rem 0 2rem; }
   .top h1, .top .lead { max-width: 52rem; }
+  .top h2.step-h { font-size: var(--gw-h3); margin: 3rem 0 1rem; padding-top: 1.5rem; border-top: 1px solid var(--gw-rule); }
+  .cmd { max-width: 40rem; }
+  .step-note { margin-top: 0.75rem; max-width: 46rem; color: var(--gw-ink-2); }
+  .mac-steps { max-width: 46rem; padding-left: 1.4rem; }
+  .mac-steps li { margin-bottom: 1rem; }
+  .mac-steps p { margin: 0 0 0.6rem; }
+  .mac-steps pre { font-size: 0.85rem; }
   .top h1 { margin-bottom: 1rem; }
   .lead { font-size: var(--gw-text-lg); color: var(--gw-ink-2); }
-  .big { display: grid; gap: 1rem; margin-top: 2rem; }
-  .pick { display: flex; flex-direction: column; gap: 0.35rem; padding: 1.8rem 1.8rem; border-radius: var(--gw-radius); background: var(--gw-action); color: var(--gw-on-action); text-decoration: none; }
+  .big { display: grid; gap: 1rem; margin-top: 1.5rem; }
+  .pick { display: flex; flex-direction: column; gap: 0.35rem; padding: 1.5rem; border: 1px solid var(--gw-ink); border-radius: var(--gw-radius); background: var(--gw-surface); color: var(--gw-ink); text-decoration: none; }
   .pick:hover { text-decoration: underline; }
   .pick:focus-visible { outline-color: var(--gw-link); }
   .pick-name { font-size: var(--gw-h2); font-weight: 700; }
-  .pick-meta { font-family: var(--gw-mono); font-size: var(--gw-text-sm); opacity: 0.85; }
+  .pick-meta { font-family: var(--gw-mono); font-size: var(--gw-text-sm); color: var(--gw-ink-2); }
   .detected { margin-top: 0.9rem; color: var(--gw-ink-2); font-size: var(--gw-text-sm); }
   section h2 { font-size: var(--gw-h3); margin: 2.5rem 0 1rem; padding-top: 1.5rem; border-top: 1px solid var(--gw-rule); }
   .chooser th[scope='col'] { vertical-align: top; }

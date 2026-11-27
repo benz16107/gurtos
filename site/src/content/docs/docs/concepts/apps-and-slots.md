@@ -3,7 +3,7 @@ title: "Apps and slots"
 description: "An app extends GurtOS by filling slots in the core: triggers, tools, log readers, model jobs and portal entries, plus HTTP routes and the vault keys it may read."
 ---
 
-GurtOS's core does tasks, approvals, undo and the log. Everything else is an app: /find, the model app, and optional apps for outside services such as Jira, the shopping agent and the wallet. An app is a folder of TypeScript that the core loads at boot. It plugs into the core through named slots, and it never changes the core. The owner can turn each app off and on again without a reinstall.
+GurtOS's core does tasks, approvals, undo and the log. Everything else is an app: /find, the model app, and optional apps such as Receipts. An app is a folder of TypeScript that the core loads at boot. It plugs into the core through named slots, and it never changes the core. The owner can turn each app off and on again without a reinstall.
 
 ## What an app is
 
@@ -46,7 +46,7 @@ A trigger is how work starts without you. It gets a `Box` handle and calls `box.
 
 A tool is how a task does something it cannot do alone: call a paid API, pay, read a mailbox. The tool runs in the core, not in the task. It declares:
 
-- `name`, as `<app>.<verb>`, such as `wallet.pay`. Tasks list it in `tools`.
+- `name`, as `<app>.<verb>`, such as `example.spend`. Tasks list it in `tools`.
 - `description` and `input`, a JSON Schema, which the model sees.
 - `secrets`, the vault keys `run` may read.
 - `hosts`, the hosts `run` talks to, for the reader and the portal.
@@ -58,7 +58,7 @@ The result goes into the action log and back to the model. It must never contain
 
 ### Log readers
 
-A log reader follows the action log. The core calls `read(event, box)` for every event, in order, starting from the first event ever written. After each one, it saves the reader's position in `BOX_HOME/cursors/<app>.<reader>`. If `read` throws, the core retries that event after 5 seconds and holds the reader there until it succeeds. So a reader that writes to an outside service catches up after an outage and never skips an event. The Jira and Elastic apps are log readers.
+A log reader follows the action log. The core calls `read(event, box)` for every event, in order, starting from the first event ever written. After each one, it saves the reader's position in `BOX_HOME/cursors/<app>.<reader>`. If `read` throws, the core retries that event after 5 seconds and holds the reader there until it succeeds. So a reader that writes to an outside service catches up after an outage and never skips an event. The Find and Live board apps are log readers.
 
 ### Model jobs
 
@@ -72,7 +72,7 @@ The `apps` slot lists the app's pages for the portal: a `name`, a `title`, and a
 
 Two more fields complete an app.
 
-**`routes`** maps `'METHOD /path'` to a handler that takes a standard `Request` and returns a `Response`. The core serves it at `/t/<app>/path` on the box's API. Like every API route, a request from off the box needs a paired device's token, unless the app lists the route in `openRoutes`. An open route is for something public on purpose, or for an outside service that proves itself with the app's own secret, such as the Jira panel. Webhooks, an app's own pages and its JSON API go here:
+**`routes`** maps `'METHOD /path'` to a handler that takes a standard `Request` and returns a `Response`. The core serves it at `/t/<app>/path` on the box's API. Like every API route, a request from off the box needs a paired device's token, unless the app lists the route in `openRoutes`. An open route is for something public on purpose, or for an outside service that proves itself with the app's own secret. Webhooks, an app's own pages and its JSON API go here:
 
 ```ts
 routes: {
@@ -94,7 +94,7 @@ The portal opens a page with a window token. It asks `POST /api/apps/<app>/windo
 - answers requests of the tasks that app started, and no one else's;
 - lasts 12 hours, or until the device that opened it is removed.
 
-Anything else is a `403`. A request of another app's task comes back with `needs: 'shell'` and the task's id, and GurtOS opens that task's window so a person answers it there. The box puts a short script first in the page that adds the token to the page's own `fetch` calls, and `/kit/gurtos.js` carries it on links, forms and `EventSource`. A request the browser makes by itself, such as a `<script type="module" src>` or an `<img>`, carries no header, so add `location.search` to its address. A page that cannot work without a real origin, such as a passkey ceremony, is listed in the app's `ownOrigin` (route keys, as in `routes`) and served without the sandbox. Only the shopping agent's Face ID page is. Such a page runs with the box's origin, so it is reviewed like core code. An app's own tasks are the ones its box started, recorded as `task.app` whatever `source` they gave.
+Anything else is a `403`. A request of another app's task comes back with `needs: 'shell'` and the task's id, and GurtOS opens that task's window so a person answers it there. The box puts a short script first in the page that adds the token to the page's own `fetch` calls, and `/kit/gurtos.js` carries it on links, forms and `EventSource`. A request the browser makes by itself, such as a `<script type="module" src>` or an `<img>`, carries no header, so add `location.search` to its address. A page that cannot work without a real origin, such as a passkey ceremony, is listed in the app's `ownOrigin` (route keys, as in `routes`) and served without the sandbox. Only the example app's `/approve` page is. Such a page runs with the box's origin, so it is reviewed like core code. An app's own tasks are the ones its box started, recorded as `task.app` whatever `source` they gave.
 
 ## The rules
 
@@ -105,7 +105,7 @@ Anything else is a `403`. A request of another app's task comes back with `needs
 
 ## Turning apps on and off
 
-The owner can turn an app off and on without a reinstall, in the portal's **App Center** or through the API, from the box's own screen or a phone paired as the owner. App Center shows each app's description, the tools, hosts and keys it uses, and one action: **Open**, **Set key**, **Details** or **Turn on**. An app's details page has **Turn off**. An app that only moves test money has a **Test only** badge.
+The owner can turn an app off and on without a reinstall, in the portal's **App Center** or through the API, from the box's own screen or a phone paired as the owner. App Center shows each app's description, the tools, hosts and keys it uses, and one action: **Open**, **Set key**, **Details** or **Turn on**. An app's details page has **Turn off**. An app that only uses test money or sample data has a **Test only** badge.
 
 | Request | Does |
 |---|---|
@@ -121,7 +121,7 @@ Apps run inside the core, as root, with the core's privileges. The slots define 
 
 ## Apps that ship with GurtOS
 
-GurtOS includes /find and the Claude model app, plus optional apps for Jira, Elastic, ASI:One, x402 payments, a shopping agent, web work through Apify, a read-only status summary and a sample credit desk. An optional app needs that service's account, and the apps that move money use test money only. Each is listed with its tools and routes in [included apps](/docs/reference/apps/).
+GurtOS includes /find, the Claude model app, the Factory app, the Live board, the attack tests and Receipts. An optional app can need an outside account. Each is listed with its tools and routes in [included apps](/docs/reference/apps/).
 
 ## Related
 

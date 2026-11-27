@@ -7,7 +7,7 @@ import { api, callMachine, machine, machines, updateMachine, useBox, type Machin
 import { Alert, Badge, Button, Group, Icon, Row } from '../kit/ui.tsx';
 import { ios, standalone } from '../pwa/pwa.tsx';
 import { PRODUCT } from '../product.ts';
-import { RELAY, SELF_HOST_DOCS, relayDown } from '../relay.ts';
+import { NO_RELAY, NO_RELAY_PUSH, RELAY, SELF_HOST_DOCS, relayDown } from '../relay.ts';
 import { b64u, unb64u } from './qs-crypto.ts';
 
 export const pushWorks = () => typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && isSecureContext;
@@ -22,13 +22,15 @@ export const needsHomeScreen = () => ios() && !standalone();
 async function pushRelay() {
   const m = machine() ?? machines()[0];
   const host = m ? await callMachine<{ relay?: string }>(m, 'GET', '/remote').then((r) => r.relay, () => undefined) : undefined;
-  return host ? `https://${host}` : RELAY;
+  return host ? `https://${host}` : RELAY; // undefined: no relay, so no push
 }
 
 /** This browser's subscription with the gateway's key (a new one if the key changed). */
 async function subscription() {
+  const relay = await pushRelay();
+  if (!relay) throw new Error(NO_RELAY_PUSH);
   const reg = await navigator.serviceWorker.ready;
-  const { publicKey } = (await fetch(`${await pushRelay()}/v1/push/key`, { signal: AbortSignal.timeout(10_000) }).then(
+  const { publicKey } = (await fetch(`${relay}/v1/push/key`, { signal: AbortSignal.timeout(10_000) }).then(
     (r) => (r.ok ? r.json() : Promise.reject()),
   ).catch(() => {
     throw new Error(`${PRODUCT}'s push service isn't answering right now. Try again later.`);
@@ -157,7 +159,7 @@ interface Remote {
   url?: string;
   state: 'off' | 'starting' | 'connected' | 'error';
   error?: string;
-  relay: string;
+  relay: string | null;
 }
 const NAME = /^[a-z0-9-]{3,30}$/;
 /** The box's "url: the relay must be ..." as a sentence: "The relay must be ...." */
@@ -179,7 +181,7 @@ export function RemoteAccess({ title = 'Reach this computer from anywhere' }: { 
   const load = () => api<Remote>('GET', '/remote').then((x) => (setR(x), setError('')), (e) => setError((e as Error).message));
   useEffect(() => void load(), []);
   // The relay this computer uses: the default, or the owner's own (PUT /api/remote/relay, only while remote access is off).
-  const [own, setOwn] = useState<{ url: string; default: string; custom: boolean }>();
+  const [own, setOwn] = useState<{ url: string | null; default: string | null; custom: boolean }>();
   const [ownTyped, setOwnTyped] = useState<string>();
   const [ownError, setOwnError] = useState('');
   useEffect(() => void api<NonNullable<typeof own>>('GET', '/remote/relay').then(setOwn, () => {}), []);
@@ -195,12 +197,13 @@ export function RemoteAccess({ title = 'Reach this computer from anywhere' }: { 
     const t = setInterval(load, 2000);
     return () => clearInterval(t);
   }, [r?.state]);
-  const relay = r?.relay ?? new URL(RELAY).host;
+  const relay = r?.relay ?? (RELAY ? new URL(RELAY).host : '');
+  const noRelay = !!r && !r.relay;
   // The box asks its relay; when the relay doesn't answer, say so instead of waiting on the name for ever.
   const words = (m: string) => (relayDown(m) ? `The relay at ${relay} isn't answering, so remote access can't turn on right now. Phones on your own network can still pair in Devices.` : m);
   useEffect(() => {
     setCheck(undefined);
-    if (!NAME.test(name)) return;
+    if (!NAME.test(name) || !r?.relay) return; // no relay: nothing to ask
     const t = setTimeout(
       () => api<{ name: string; available: boolean; reason?: string }>('GET', `/remote/name/${name}`).then(setCheck, (e) => setCheck({ name, available: false, failed: words((e as Error).message) })),
       400,
@@ -246,7 +249,9 @@ export function RemoteAccess({ title = 'Reach this computer from anywhere' }: { 
           </Row>
         </>
       ) : (
-        r && (
+        r && (noRelay ? (
+          <Row icon="dialog-warning" title="No relay is set up" sub={NO_RELAY} />
+        ) : (
           <>
             <Row title="Name" sub="Lowercase letters, digits and hyphens.">
               <span class="gos-remote-name">
@@ -260,9 +265,9 @@ export function RemoteAccess({ title = 'Reach this computer from anywhere' }: { 
               </Button>
             </Row>
           </>
-        )
+        ))
       )}
-      {(down || r?.state === 'error' || own?.custom) && (
+      {(down || noRelay || r?.state === 'error' || own?.custom) && (
         <a class="g-row" href={SELF_HOST_DOCS} target="_blank" rel="noopener">
           <Icon name="network-server" />
           <span class="g-row-text">
@@ -272,16 +277,16 @@ export function RemoteAccess({ title = 'Reach this computer from anywhere' }: { 
           <Icon name="pan-end" />
         </a>
       )}
-      {own && b.owner && !r?.enabled && (down || r?.state === 'error' || own.custom) && (
-        <Row title="Relay" sub={ownError || (own.custom ? `Your own relay. The default is ${new URL(own.default).host}.` : 'The default relay.')}>
+      {own && b.owner && !r?.enabled && (down || noRelay || r?.state === 'error' || own.custom) && (
+        <Row title="Relay" sub={ownError || (own.custom ? `Your own relay.${own.default ? ` The default is ${new URL(own.default).host}.` : ''}` : own.url ? 'The relay set by BOX_RELAY.' : 'None yet.')}>
           <span class="gos-remote-name">
-            <input class="g-field" value={ownTyped ?? own.url} inputMode="url" autoCapitalize="none" autoComplete="off" spellcheck={false} aria-label="Relay address" placeholder="https://relay.example.com" onInput={(e) => setOwnTyped((e.target as HTMLInputElement).value.trim())} />
+            <input class="g-field" value={ownTyped ?? own.url ?? ''} inputMode="url" autoCapitalize="none" autoComplete="off" spellcheck={false} aria-label="Relay address" placeholder="https://relay.example.com" onInput={(e) => setOwnTyped((e.target as HTMLInputElement).value.trim())} />
             <Button onClick={() => chooseRelay(ownTyped ?? own.url)} disabled={busy || !ownTyped || ownTyped === own.url}>
               Save
             </Button>
             {own.custom && (
               <Button kind="flat" onClick={() => chooseRelay(null)} disabled={busy}>
-                Use the default
+                {own.default ? 'Use the default' : 'Remove'}
               </Button>
             )}
           </span>

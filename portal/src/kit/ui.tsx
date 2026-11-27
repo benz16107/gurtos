@@ -6,15 +6,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { ICONS } from './icons.ts';
 import activity from './apps/activity.svg';
 import appCenter from './apps/app-center.svg';
-import asiOne from './apps/asi-one.svg';
 import creditDesk from './apps/credit-desk.svg';
 import find from './apps/find.svg';
-import jira from './apps/jira.svg';
 import settings from './apps/settings.svg';
-import shopper from './apps/shopper.svg';
 import tasks from './apps/tasks.svg';
 import timeMachine from './apps/time-machine.svg';
-import wallet from './apps/wallet.svg';
 import waiting from './apps/waiting.svg';
 import audit from './apps/audit.svg';
 
@@ -44,25 +40,16 @@ const APP_ICONS: Record<string, { glyph: string; tile: string }> = {
   settings: { glyph: settings, tile: 'var(--color-app-settings)' },
   'app-center': { glyph: appCenter, tile: 'var(--color-app-app-center)' },
   'credit-desk': { glyph: creditDesk, tile: 'var(--color-app-credit-desk)' },
-  shopper: { glyph: shopper, tile: 'var(--color-app-shopper)' },
-  wallet: { glyph: wallet, tile: 'var(--color-app-wallet)' },
   find: { glyph: find, tile: 'var(--color-app-find)' },
-  jira: { glyph: jira, tile: 'var(--color-app-jira)' },
-  fetch: { glyph: asiOne, tile: 'var(--color-app-asi-one)' },
   waiting: { glyph: waiting, tile: 'var(--color-app-waiting)' },
   audit: { glyph: audit, tile: 'var(--color-app-audit)' },
 };
 // Apps without a drawn glyph: an Adwaita symbolic icon on their own tile. An id is a track, or track/window.
 const APP_SYMBOLS: Record<string, { icon: string; tile: string }> = {
-  'shopper/store': { icon: 'user-home', tile: 'var(--color-app-web)' },
-  apify: { icon: 'web-browser', tile: 'var(--color-app-mana)' },
   factory: { icon: 'utilities-terminal', tile: 'var(--color-app-tasks)' },
   spacetime: { icon: 'view-grid', tile: 'var(--color-app-activity)' },
   anthropic: { icon: 'applications-science', tile: 'var(--color-app-time-machine)' },
-  armadin: { icon: 'security-high', tile: 'var(--color-app-audit)' },
-  elastic: { icon: 'edit-find', tile: 'var(--color-app-elastic)' },
-  mana: { icon: 'dialog-information', tile: 'var(--color-app-mana)' },
-  vultr: { icon: 'network-server', tile: 'var(--color-app-find)' },
+  attacks: { icon: 'security-high', tile: 'var(--color-app-audit)' },
   example: { icon: 'preferences-desktop-apps', tile: 'var(--color-app-other)' },
   receipts: { icon: 'x-office-document', tile: 'var(--color-app-audit)' },
 };

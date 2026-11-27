@@ -24,10 +24,10 @@ export default async (d: DemoKit) => {
     const { openSealed, phoneKey } = await import('./src/apps/qs-crypto.ts');
     const me = await phoneKey();
     const s = core.keyPair().pk.slice(0, 22); // any 128-bit base64url secret
-    const sealed = core.seal(me.pk, s, { host: 'demo.box.gurtos.com', code: 'a2201f2f' });
+    const sealed = core.seal(me.pk, s, { host: 'demo.relay.example.com', code: 'a2201f2f' });
     const got = await openSealed<{ host: string; code: string }>(me.privateKey, s, sealed);
     const wrong = await openSealed(me.privateKey, 'A'.repeat(22), sealed).then(() => false, () => true);
-    d.check(got.host === 'demo.box.gurtos.com' && got.code === 'a2201f2f' && wrong, "Quick Start: the phone opens the new computer's sealed address and owner code with WebCrypto, and a wrong secret opens nothing");
+    d.check(got.host === 'demo.relay.example.com' && got.code === 'a2201f2f' && wrong, "Quick Start: the phone opens the new computer's sealed address and owner code with WebCrypto, and a wrong secret opens nothing");
   }
 
   const base = `http://127.0.0.1:${fs.readFileSync(path.join(d.home, 'api.port'), 'utf8').trim()}`;

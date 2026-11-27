@@ -55,11 +55,11 @@ The box's own screen and every paired device can answer:
 
 - `POST /api/approvals/<id> {approved}` on the box's API. From the box's own machine, `by` in the body names who answered. From anywhere else the request must carry a paired device's token, and the core names the device, whatever `by` says.
 - The `answer` reducer in SpacetimeDB, `answer({id, approved, by})`. SpacetimeDB listens on `127.0.0.1`, and the reducer works only from a connection the box has vouched for: its own screen, or a paired phone that registered its connection. The answer is logged under that vouched name.
-- Optional apps that drive the box: the Jira panel's Approve and Deny buttons, and cards in an ASI:One chat.
+- Apps that drive the box through its API, such as a chat or an issue tracker.
 
 The box's own screen answers through SpacetimeDB when it is connected, and through the HTTP API when it is not. It names itself `box screen`.
 
-**The first answer wins.** Later answers to the same approval change nothing. The core writes `approval.answered` with who answered (`portal`, `phone`, `jira:<name>`, `asi1`, or a paired phone's name), wakes the waiting call, and moves the task back to `running` once nothing else of it is pending.
+**The first answer wins.** Later answers to the same approval change nothing. The core writes `approval.answered` with who answered (`portal`, `phone`, or a paired phone's name), wakes the waiting call, and moves the task back to `running` once nothing else of it is pending.
 
 A paired phone answers over the HTTP API with its device token as `Authorization: Bearer <token>`. The core records the phone's name as `by`. An answer from off the box with no token, or an unknown or revoked one, gets `401` and changes nothing. See [approve from your phone](/docs/guides/approve-from-your-phone/).
 
