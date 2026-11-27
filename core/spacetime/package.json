@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "spacetimedb": "2.13.0"
+    "spacetimedb": "2.16.3"
   }
 }
